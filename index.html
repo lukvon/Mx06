@@ -3,188 +3,238 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16201d">
 <title>Tisk na MX06</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-/* Layout: one column control panel; on the side a strip of "thermal paper" showing exactly what will print */
+/* Layout: the receipt preview is the hero; images, presets and sliders stack beneath; print bar sticks to the bottom */
 :root{
-  --bg:#eef0ee; --panel:#ffffff; --fg:#1d2321; --muted:#5d6764; --line:#d5dbd8;
-  --accent:#0f7a5c; --accent-fg:#ffffff; --paper:#fbfbf7; --danger:#b3261e;
-  --display:"Archivo",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --bg:#e9ece8; --surface:#ffffff; --surface2:#f3f5f2; --fg:#17201d; --muted:#65706b; --line:#d9dfdb;
+  --accent:#1f7a5a; --accent-soft:#d8ece3; --on-accent:#ffffff; --paper:#fdfdf8; --ink:#141414; --danger:#b3261e;
+  --display:"Bricolage Grotesque",system-ui,sans-serif; --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
   color-scheme:light;
 }
-@media (prefers-color-scheme:dark){:root{
-  --bg:#141917; --panel:#1d2421; --fg:#e7ece9; --muted:#9aa6a1; --line:#2f3a36;
-  --accent:#3fbf93; --accent-fg:#0b1a14; --paper:#f4f4ee; --danger:#ff8a80; color-scheme:dark}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101614; --surface:#18201d; --surface2:#1f2925; --fg:#e8eeeb; --muted:#94a19b; --line:#2b3632;
+  --accent:#48c494; --accent-soft:#1d3a2f; --on-accent:#08170f; --danger:#ff8a80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101614; --surface:#18201d; --surface2:#1f2925; --fg:#e8eeeb; --muted:#94a19b; --line:#2b3632;
+  --accent:#48c494; --accent-soft:#1d3a2f; --on-accent:#08170f; --danger:#ff8a80; color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--display);
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
-.wrap{max-width:980px;margin:0 auto;display:grid;gap:20px;grid-template-columns:minmax(0,1fr) 300px;align-items:start}
-@media (max-width:760px){.wrap{grid-template-columns:minmax(0,1fr)}}
-header{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
-h1{margin:0;font-weight:800;font-size:1.6rem;letter-spacing:-.01em}
-h1 small{display:block;font:400 .8rem var(--mono);color:var(--muted);letter-spacing:.02em}
-.status{font:600 .8rem var(--mono);padding:6px 10px;border-radius:99px;border:1px solid var(--line);display:flex;gap:8px;align-items:center}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
-.status.on .dot{background:var(--accent)}
-section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px}
-h2{margin:0;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-button,.filebtn{font:600 .95rem var(--display);border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:11px 14px;cursor:pointer}
-button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
-button:disabled{opacity:.45;cursor:not-allowed}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.row{display:flex;flex-wrap:wrap;gap:10px}
-.row>button{flex:1 1 140px}
-#files{display:none}
-.list{display:grid;gap:8px}
-.item{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px}
-.item img{width:56px;height:56px;object-fit:cover;border-radius:4px;background:var(--paper)}
-.item .name{font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.item .meta{font:.75rem var(--mono);color:var(--muted)}
-.item .btns{display:flex;gap:4px}
-.item .btns button{padding:6px 9px;font-size:.85rem}
-.empty{color:var(--muted);font-size:.9rem}
-label.f{display:grid;gap:4px;font-size:.85rem}
-label.f span{display:flex;justify-content:space-between}
-label.f output{font:600 .8rem var(--mono);color:var(--muted)}
-input[type=range]{width:100%;accent-color:var(--accent)}
-select,input[type=number]{font:inherit;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
-.check{display:flex;gap:8px;align-items:center;font-size:.9rem}
-.check input{accent-color:var(--accent);width:18px;height:18px}
-.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
-.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
-#log{font:.75rem/1.5 var(--mono);color:var(--muted);max-height:120px;overflow:auto;white-space:pre-wrap;margin:0}
-.paperbox{position:sticky;top:12px}
-.paper{background:var(--paper);border-radius:2px;padding:14px 0 30px;box-shadow:0 1px 0 var(--line),0 8px 24px rgba(0,0,0,.12);
-  -webkit-mask:radial-gradient(circle 5px at 50% 100%,transparent 98%,#000) 0 0/12px 100% repeat-x;mask:radial-gradient(circle 5px at 50% 100%,transparent 98%,#000) 0 0/12px 100% repeat-x;
-  max-height:70vh;overflow:auto}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--body);-webkit-tap-highlight-color:transparent}
+.app{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 120px;display:grid;gap:18px}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font:800 1.5rem/1 var(--display);letter-spacing:-.02em}
+.brand span{color:var(--accent)}
+.conn{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:99px;padding:9px 14px 9px 12px;font:600 .88rem var(--body);cursor:pointer}
+.conn i{width:10px;height:10px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 3px var(--surface2)}
+.conn.on i{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.conn.busy i{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+
+/* receipt */
+.stage{display:grid;justify-items:center;padding:6px 0 2px}
+.slot{width:min(300px,82%);height:10px;border-radius:6px;background:var(--fg);opacity:.85;position:relative;z-index:2}
+.paper{width:min(276px,76%);margin-top:-5px;background:var(--paper);color:var(--ink);padding:16px 0 26px;max-height:46vh;overflow:auto;
+  box-shadow:0 10px 30px rgba(0,0,0,.14);
+  -webkit-mask:linear-gradient(#000 0 0) top/100% calc(100% - 8px) no-repeat,radial-gradient(circle 6px at 50% 100%,transparent 96%,#000) bottom/14px 9px repeat-x;
+  mask:linear-gradient(#000 0 0) top/100% calc(100% - 8px) no-repeat,radial-gradient(circle 6px at 50% 100%,transparent 96%,#000) bottom/14px 9px repeat-x}
 .paper canvas{display:block;width:100%;image-rendering:pixelated}
-.paper .gap{border-top:1px dashed #c9c9bf;margin:0 8px}
-.paperbox p{font:.75rem var(--mono);color:var(--muted);margin:8px 2px 0}
-.warn{border-left:3px solid var(--danger);padding:8px 12px;font-size:.88rem;background:var(--panel);border-radius:4px}
+.paper .gap{border-top:1px dashed #c8c8bd;margin-inline:10px}
+.paper .emptyp{display:grid;gap:10px;justify-items:center;text-align:center;padding:34px 18px;color:#6d6d64;font-size:.9rem}
+.paper .emptyp b{font:700 1.05rem var(--display);color:#2a2a26}
+.meta{font:500 .75rem var(--mono);color:var(--muted);margin-top:10px;font-variant-numeric:tabular-nums}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:12px}
+.card h2{margin:0;font:700 .78rem var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.card h2 small{text-transform:none;letter-spacing:0;font-weight:500}
+
+/* thumbnails */
+.thumbs{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x proximity}
+.thumb{flex:0 0 84px;scroll-snap-align:start;display:grid;gap:4px}
+.thumb .ph{position:relative;width:84px;height:84px;border-radius:12px;overflow:hidden;background:var(--surface2)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .n{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.6);color:#fff;font:600 .7rem var(--mono);padding:1px 6px;border-radius:6px}
+.thumb .x{position:absolute;right:4px;top:4px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer}
+.thumb .mv{display:flex;gap:4px}
+.thumb .mv button{flex:1;border:1px solid var(--line);background:var(--surface2);color:var(--fg);border-radius:8px;padding:4px 0;font-size:.85rem;cursor:pointer}
+.thumb .mv button:disabled{opacity:.3}
+.add{flex:0 0 84px;height:84px;border:2px dashed var(--line);border-radius:12px;display:grid;place-items:center;text-align:center;color:var(--accent);font:700 .78rem var(--body);cursor:pointer;background:transparent}
+.add b{display:block;font-size:1.6rem;line-height:1}
+#files{display:none}
+
+/* segmented presets */
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface2);border-radius:12px;padding:4px;gap:4px}
+.seg button{border:0;background:transparent;color:var(--fg);border-radius:9px;padding:10px 4px;font:600 .9rem var(--body);cursor:pointer;display:grid;gap:2px}
+.seg button small{font-weight:500;font-size:.72rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.12);color:var(--accent)}
+
+/* sliders */
+.sl{display:grid;gap:6px}
+.sl .lab{display:flex;justify-content:space-between;font-size:.9rem;font-weight:600}
+.sl output{font:500 .8rem var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.sl .hint{font-size:.75rem;color:var(--muted);display:flex;justify-content:space-between}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:99px;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+input[type=range]::-moz-range-track{height:6px;border-radius:99px;background:var(--line)}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--accent);border:3px solid var(--surface)}
+
+details{border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:600;color:var(--accent);list-style:none;display:flex;justify-content:space-between}
+summary::after{content:"＋"}
+details[open] summary::after{content:"－"}
+.adv{display:grid;gap:14px;padding-top:12px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fld{display:grid;gap:4px;font-size:.85rem;font-weight:600}
+select,input[type=number]{font:500 .95rem var(--body);padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);width:100%}
+.chk{display:flex;gap:10px;align-items:center;font-size:.9rem}
+.chk input{width:20px;height:20px;accent-color:var(--accent)}
+.ghost{border:1px solid var(--line);background:var(--surface2);color:var(--fg);border-radius:12px;padding:12px;font:600 .9rem var(--body);cursor:pointer}
+.ghost:disabled{opacity:.45}
+#log{font:500 .72rem/1.5 var(--mono);color:var(--muted);max-height:110px;overflow:auto;white-space:pre-wrap;margin:0;background:var(--surface2);border-radius:10px;padding:8px 10px}
+.warn{border-left:3px solid var(--danger);background:var(--surface);padding:10px 12px;border-radius:8px;font-size:.88rem}
+
+/* bottom bar */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-top:10px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+.bar .in{max-width:560px;margin:0 auto;display:grid;gap:8px}
+.prog{height:4px;border-radius:99px;background:var(--line);overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+.go{border:0;border-radius:14px;background:var(--accent);color:var(--on-accent);padding:15px;font:700 1.05rem var(--display);cursor:pointer;width:100%}
+.go:disabled{background:var(--line);color:var(--muted);cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,.add:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Tisk na MX06<small>384 px · 203 dpi · Bluetooth</small></h1>
-    <div class="status" id="status"><i class="dot"></i><span id="statusTxt">Nepřipojeno</span></div>
-  </header>
+<div class="app">
+  <div class="top">
+    <div class="brand">MX<span>06</span></div>
+    <button class="conn" id="conn"><i></i><span id="connTxt">Připojit tiskárnu</span></button>
+  </div>
 
-  <main style="display:grid;gap:20px;min-width:0">
-    <div class="warn" id="noBt" hidden>Tento prohlížeč neumí Bluetooth. Otevři stránku v Chrome na Androidu přes adresu https://.</div>
+  <div class="warn" id="noBt" hidden>Tento prohlížeč neumí Bluetooth. Otevři stránku v Chrome na Androidu.</div>
 
-    <section>
-      <h2>1 · Tiskárna</h2>
-      <div class="row">
-        <button class="primary" id="connect">Připojit tiskárnu</button>
-        <button id="disconnect" disabled>Odpojit</button>
-      </div>
-    </section>
-
-    <section>
-      <h2>2 · Obrázky</h2>
-      <div class="row">
-        <label class="filebtn" for="files" style="flex:1 1 140px;text-align:center">Přidat obrázky…</label>
-        <input type="file" id="files" accept="image/*" multiple>
-        <button id="clear">Vymazat vše</button>
-      </div>
-      <div class="list" id="list"><p class="empty">Zatím žádné obrázky. Můžeš jich vybrat víc najednou.</p></div>
-    </section>
-
-    <section>
-      <h2>3 · Nastavení</h2>
-      <div class="grid2">
-        <label class="f"><span>Režim <output></output></span>
-          <select id="mode"><option value="atkinson">Fotka – ostrá (doporučeno)</option><option value="dither">Fotka – jemný rastr</option><option value="threshold">Text / kresba (černobíle)</option></select></label>
-        <label class="f"><span>Doostření <output id="oSharp">30</output></span><input type="range" id="sharp" min="0" max="100" value="30"></label>
-        <label class="f"><span>Počet kopií</span><input type="number" id="copies" min="1" max="20" value="1"></label>
-        <label class="f"><span>Jas <output id="oBright">0</output></span><input type="range" id="bright" min="-80" max="80" value="0"></label>
-        <label class="f"><span>Kontrast <output id="oContrast">0</output></span><input type="range" id="contrast" min="-60" max="80" value="10"></label>
-        <label class="f"><span>Sytost tisku <output id="oEnergy">4 / 7</output></span><input type="range" id="energy" min="1" max="7" value="4"></label>
-        <label class="f"><span>Rychlost tisku</span>
-          <select id="speed"><option value="45">Rychlá (světlejší)</option><option value="32" selected>Normální</option><option value="20">Pomalá (tmavší)</option><option value="12">Nejpomalejší (nejtmavší)</option></select></label>
-        <label class="f"><span>Mezera mezi obrázky <output id="oGap">5 mm</output></span><input type="range" id="gap" min="0" max="30" value="5"></label>
-      </div>
-      <label class="check"><input type="checkbox" id="rotate" checked> Otočit obrázky na šířku pásky, když jsou širší než vyšší</label>
-      <label class="check"><input type="checkbox" id="cut"> Mezi obrázky vytisknout čáru pro odstřižení</label>
-    </section>
-
-    <section>
-      <h2>4 · Tisk</h2>
-      <button class="primary" id="print" disabled>Vytisknout vše</button>
-      <button id="test" disabled>Vytisknout zkušební proužek sytosti (1–7)</button>
-      <div class="progress"><i id="bar"></i></div>
-      <pre id="log"></pre>
-    </section>
-  </main>
-
-  <aside class="paperbox">
+  <div class="stage">
+    <div class="slot"></div>
     <div class="paper" id="paper"></div>
-    <p id="paperInfo">Náhled pásky</p>
-  </aside>
+    <div class="meta" id="paperInfo">384 bodů · 48 mm</div>
+  </div>
+
+  <section class="card">
+    <h2>Obrázky <small id="count"></small></h2>
+    <div class="thumbs" id="thumbs"></div>
+    <input type="file" id="files" accept="image/*" multiple>
+  </section>
+
+  <section class="card">
+    <h2>Styl tisku</h2>
+    <div class="seg" id="presets">
+      <button data-p="photo" aria-pressed="true">Fotka<small>odstíny</small></button>
+      <button data-p="draw" aria-pressed="false">Kresba<small>jemné linky</small></button>
+      <button data-p="text" aria-pressed="false">Text<small>ostře</small></button>
+    </div>
+    <div class="sl"><div class="lab">Sytost tisku <output id="oEnergy">4 / 7</output></div>
+      <input type="range" id="energy" min="1" max="7" value="4"><div class="hint"><span>světlejší</span><span>tmavší</span></div></div>
+    <div class="sl"><div class="lab">Jas <output id="oBright">0</output></div><input type="range" id="bright" min="-80" max="80" value="0"></div>
+    <div class="sl"><div class="lab">Kontrast <output id="oContrast">10</output></div><input type="range" id="contrast" min="-60" max="80" value="10"></div>
+
+    <details>
+      <summary>Další nastavení</summary>
+      <div class="adv">
+        <div class="sl"><div class="lab">Kompenzace rozpíjení <output id="oGamma">1.5</output></div>
+          <input type="range" id="gamma" min="10" max="25" value="15"><div class="hint"><span>vypnuto</span><span>světlejší stíny</span></div></div>
+        <div class="sl"><div class="lab">Doostření <output id="oSharp">30</output></div><input type="range" id="sharp" min="0" max="100" value="30"></div>
+        <div class="two">
+          <label class="fld">Rastr
+            <select id="mode"><option value="atkinson">Ostrý (Atkinson)</option><option value="fs">Jemný (Floyd–Steinberg)</option><option value="threshold">Bez rastru</option></select></label>
+          <label class="fld">Rychlost
+            <select id="speed"><option value="32">Rychlá</option><option value="48" selected>Normální</option><option value="64">Pomalá, tmavší</option><option value="96">Nejpomalejší</option></select></label>
+          <label class="fld">Kopie<input type="number" id="copies" min="1" max="20" value="1"></label>
+          <label class="fld">Mezera (mm)<input type="number" id="gap" min="0" max="30" value="5"></label>
+        </div>
+        <label class="chk"><input type="checkbox" id="rotate" checked> Široké obrázky otočit na délku pásky</label>
+        <label class="chk"><input type="checkbox" id="cut"> Mezi obrázky čára na odstřižení</label>
+        <label class="chk"><input type="checkbox" id="rle"> Komprimovaný přenos (plynulejší, zkušební)</label>
+        <button class="ghost" id="test" disabled>Zkušební proužek sytosti 1–7</button>
+        <pre id="log"></pre>
+      </div>
+    </details>
+  </section>
 </div>
 
+<div class="bar"><div class="in">
+  <div class="prog"><i id="prog"></i></div>
+  <button class="go" id="print" disabled>Nejdřív připoj tiskárnu</button>
+</div></div>
+
 <script>
-const W = 384;                         // printhead width in dots
+const W = 384;
 const SVC = 0xae30, WCH = 0xae01, NCH = 0xae02;
 const $ = id => document.getElementById(id);
 const log = m => { $('log').textContent += m + '\n'; $('log').scrollTop = 1e9; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-/* ---------- protocol (GB01 family: MX05/MX06/MX08/MX10) ---------- */
+/* ---------- protocol (MX05/MX06/MX08/MX10, GB01 family) ---------- */
 const CRC = new Uint8Array(256);
 for (let i = 0; i < 256; i++) { let c = i; for (let b = 0; b < 8; b++) c = c & 0x80 ? ((c << 1) ^ 0x07) & 0xff : (c << 1) & 0xff; CRC[i] = c; }
 const crc8 = d => { let c = 0; for (const b of d) c = CRC[(c ^ b) & 0xff]; return c; };
-const cmd = (c, data) => [0x51, 0x78, c, 0x00, data.length & 0xff, 0x00, ...data, crc8(data), 0xff];
+const cmd = (c, data) => [0x51, 0x78, c, 0x00, data.length & 0xff, (data.length >> 8) & 0xff, ...data, crc8(data), 0xff];
 const C = {
   state: () => cmd(0xa3, [0x00]),
-  quality: () => cmd(0xa4, [0x33]),
+  dpi: () => cmd(0xa4, [50]),
   energy: e => cmd(0xaf, [e & 0xff, (e >> 8) & 0xff]),
-  applyEnergy: () => cmd(0xbe, [0x01]),
+  drawMode: text => cmd(0xbe, [text ? 0x01 : 0x00]),     // 0 = image, 1 = text
   speed: s => cmd(0xbd, [s]),
   update: () => cmd(0xa9, [0x00]),
   latticeStart: () => cmd(0xa6, [0xaa,0x55,0x17,0x38,0x44,0x5f,0x5f,0x5f,0x44,0x38,0x2c]),
   latticeEnd: () => cmd(0xa6, [0xaa,0x55,0x17,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x17]),
   feed: n => cmd(0xa1, [n & 0xff, (n >> 8) & 0xff]),
-  row: bytes => cmd(0xa2, bytes),
+  row: b => cmd(0xa2, b),
+  rowRle: b => cmd(0xbf, b),
 };
+const ENERGY = [0, 0x1800, 0x2800, 0x3800, 0x4c00, 0x6400, 0x8400, 0xb000];
 
 /* ---------- Bluetooth ---------- */
-let dev = null, wch = null, paused = false, chunk = 180, flowCtl = false;
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-function setStatus(on, txt) { $('status').classList.toggle('on', on); $('statusTxt').textContent = txt; $('connect').disabled = on; $('disconnect').disabled = !on; refreshPrint(); }
-
+// speed byte is a divider: the motor runs at 2304 / divider lines per second, so a bigger number is slower
+let dev = null, wch = null, paused = false, chunk = 240, flowCtl = false, printing = false;
 if (!navigator.bluetooth) $('noBt').hidden = false;
 
-$('connect').onclick = async () => {
+function setConn(state, txt) {
+  const b = $('conn'); b.classList.toggle('on', state === 'on'); b.classList.toggle('busy', state === 'busy');
+  $('connTxt').textContent = txt; refresh();
+}
+$('conn').onclick = async () => {
+  if (wch) { if (!printing) dev.gatt.disconnect(); return; }
   try {
     dev = await navigator.bluetooth.requestDevice({
       filters: [{ services: [SVC] }, { namePrefix: 'MX' }, { namePrefix: 'GB' }, { namePrefix: 'GT' }, { namePrefix: 'YT' }],
       optionalServices: [SVC]
     });
-    dev.addEventListener('gattserverdisconnected', () => { wch = null; setStatus(false, 'Odpojeno'); log('Tiskárna se odpojila.'); });
-    log('Připojuji k ' + (dev.name || 'tiskárně') + '…');
-    const srv = await dev.gatt.connect();
-    const s = await srv.getPrimaryService(SVC);
+    setConn('busy', 'Připojuji…');
+    dev.addEventListener('gattserverdisconnected', () => { wch = null; flowCtl = false; setConn('off', 'Připojit tiskárnu'); log('Tiskárna se odpojila.'); });
+    const s = await (await dev.gatt.connect()).getPrimaryService(SVC);
     wch = await s.getCharacteristic(WCH);
     try {
       const n = await s.getCharacteristic(NCH);
       await n.startNotifications();
       n.addEventListener('characteristicvaluechanged', e => {
         const v = new Uint8Array(e.target.value.buffer);
-        flowCtl = true;                                // printer talks back, so it will also tell us when to pause
-        if (v[2] === 0xae) paused = v[6] === 0x10;   // printer buffer full / free again
+        flowCtl = true;
+        if (v[2] === 0xae) paused = v[6] === 0x10;
       });
-    } catch (e) { log('Bez zpětné vazby z tiskárny, tisknu pomaleji.'); }
-    setStatus(true, dev.name || 'Připojeno');
-    log('Připojeno.');
-  } catch (e) { log('Připojení selhalo: ' + e.message); }
+    } catch (e) {}
+    setConn('on', dev.name || 'Připojeno');
+    log('Připojeno: ' + (dev.name || 'tiskárna'));
+  } catch (e) { setConn('off', 'Připojit tiskárnu'); if (e.name !== 'NotFoundError') log('Připojení selhalo: ' + e.message); }
 };
-$('disconnect').onclick = () => dev && dev.gatt.connected && dev.gatt.disconnect();
 
-// With buffer feedback from the printer we can stream as fast as Bluetooth allows, so the motor never waits for data
 async function send(bytes, onProgress) {
   const buf = Uint8Array.from(bytes);
   let n = 0;
@@ -200,115 +250,140 @@ async function send(bytes, onProgress) {
   }
 }
 
-/* ---------- keep the screen on while printing (screen-off makes Android suspend Bluetooth from the page) ---------- */
-let wakeLock = null, busy = false;
+/* keep the screen on: Android suspends the page's Bluetooth when the display sleeps */
+let wakeLock = null;
 async function keepAwake(on) {
-  busy = on;
   try {
     if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); }
     if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
-  } catch (e) { log('Displej nejde držet zapnutý, nenech telefon během tisku zhasnout.'); }
+  } catch (e) { log('Displej nejde držet zapnutý. Během tisku nenech telefon zhasnout.'); }
 }
-document.addEventListener('visibilitychange', () => { if (busy && document.visibilityState === 'visible') keepAwake(true); });
+document.addEventListener('visibilitychange', () => { if (printing && document.visibilityState === 'visible') keepAwake(true); });
 
 /* ---------- images ---------- */
-let items = [];   // {name, img, url}
+let items = [];
 $('files').onchange = async e => {
   for (const f of e.target.files) {
-    const url = URL.createObjectURL(f);
-    const img = new Image(); img.src = url;
+    const url = URL.createObjectURL(f), img = new Image(); img.src = url;
     try { await img.decode(); items.push({ name: f.name, img, url }); } catch { log('Nejde načíst: ' + f.name); }
   }
-  e.target.value = '';
-  render();
+  e.target.value = ''; render();
 };
-$('clear').onclick = () => { items.forEach(i => URL.revokeObjectURL(i.url)); items = []; render(); };
 
 function render() {
-  const l = $('list'); l.innerHTML = '';
-  if (!items.length) l.innerHTML = '<p class="empty">Zatím žádné obrázky. Můžeš jich vybrat víc najednou.</p>';
+  const t = $('thumbs'); t.innerHTML = '';
   items.forEach((it, i) => {
-    const d = document.createElement('div'); d.className = 'item';
-    d.innerHTML = `<img alt=""><div style="min-width:0"><div class="name"></div><div class="meta">${it.img.naturalWidth}×${it.img.naturalHeight}</div></div>
-      <div class="btns"><button aria-label="Nahoru">↑</button><button aria-label="Dolů">↓</button><button aria-label="Odebrat">✕</button></div>`;
-    d.querySelector('img').src = it.url; d.querySelector('.name').textContent = it.name;
-    const [up, down, rm] = d.querySelectorAll('button');
-    up.disabled = i === 0; down.disabled = i === items.length - 1;
-    up.onclick = () => { [items[i - 1], items[i]] = [items[i], items[i - 1]]; render(); };
-    down.onclick = () => { [items[i + 1], items[i]] = [items[i], items[i + 1]]; render(); };
-    rm.onclick = () => { URL.revokeObjectURL(it.url); items.splice(i, 1); render(); };
-    l.appendChild(d);
+    const d = document.createElement('div'); d.className = 'thumb';
+    d.innerHTML = `<div class="ph"><img alt=""><span class="n">${i + 1}</span><button class="x" aria-label="Odebrat">✕</button></div>
+      <div class="mv"><button aria-label="Dřív">‹</button><button aria-label="Později">›</button></div>`;
+    d.querySelector('img').src = it.url;
+    const [x, l, r] = d.querySelectorAll('button');
+    l.disabled = i === 0; r.disabled = i === items.length - 1;
+    x.onclick = () => { URL.revokeObjectURL(it.url); items.splice(i, 1); render(); };
+    l.onclick = () => { [items[i - 1], items[i]] = [items[i], items[i - 1]]; render(); };
+    r.onclick = () => { [items[i + 1], items[i]] = [items[i], items[i + 1]]; render(); };
+    t.appendChild(d);
   });
-  preview(); refreshPrint();
+  const add = document.createElement('label'); add.className = 'add'; add.htmlFor = 'files';
+  add.innerHTML = '<div><b>+</b>Přidat</div>'; t.appendChild(add);
+  $('count').textContent = items.length ? items.length + ' ks' : '';
+  preview(); refresh();
 }
+
+/* ---------- presets ---------- */
+const PRESETS = {
+  photo: { mode: 'atkinson', sharp: 30, gamma: 15, contrast: 10, bright: 0 },
+  draw:  { mode: 'atkinson', sharp: 60, gamma: 12, contrast: 30, bright: 10 },
+  text:  { mode: 'threshold', sharp: 40, gamma: 10, contrast: 40, bright: 10 },
+};
+let preset = 'photo';
+$('presets').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  preset = b.dataset.p;
+  document.querySelectorAll('#presets button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  const p = PRESETS[preset];
+  for (const k in p) $(k).value = p[k];
+  labels(); preview();
+};
 
 function settings() {
   return {
-    mode: $('mode').value, sharp: +$('sharp').value, bright: +$('bright').value, contrast: +$('contrast').value,
-    rotate: $('rotate').checked, cut: $('cut').checked,
-    gap: +$('gap').value, copies: Math.max(1, Math.min(20, +$('copies').value || 1)),
-    energy: ENERGY[+$('energy').value], speed: +$('speed').value
+    mode: $('mode').value, sharp: +$('sharp').value, gamma: +$('gamma').value / 10,
+    bright: +$('bright').value, contrast: +$('contrast').value,
+    rotate: $('rotate').checked, cut: $('cut').checked, rle: $('rle').checked,
+    gap: Math.max(0, Math.min(30, +$('gap').value || 0)), copies: Math.max(1, Math.min(20, +$('copies').value || 1)),
+    energy: ENERGY[+$('energy').value], speed: +$('speed').value, text: preset === 'text'
   };
 }
-const ENERGY = [0, 0x1800, 0x2800, 0x3800, 0x4c00, 0x6400, 0x8400, 0xb000];
 
-// Returns {w, h, bits: Uint8Array (1 = black)}
+/* ---------- image processing ---------- */
 function processImage(img, s) {
-  let iw = img.naturalWidth, ih = img.naturalHeight;
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
   const rot = s.rotate && iw > ih;
-  const srcW = rot ? ih : iw, srcH = rot ? iw : ih;
-  const h = Math.max(1, Math.round(srcH * W / srcW));
-  // Downscale in halving steps: a single big jump to 384 px loses fine detail and looks blocky
-  let src = img, sw = rot ? srcH : srcW, sh = rot ? srcW : srcH;   // unrotated source size
-  const tw = rot ? h : W, th = rot ? W : h;                          // unrotated target size
+  const h = Math.max(1, Math.round((rot ? iw : ih) * W / (rot ? ih : iw)));
+  // halve in steps so detail survives the big downscale
+  let src = img, sw = iw, sh = ih;
+  const tw = rot ? h : W;
   while (sw / 2 > tw * 1.5) {
     const c = document.createElement('canvas'); c.width = Math.round(sw / 2); c.height = Math.round(sh / 2);
     const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(src, 0, 0, c.width, c.height);
     src = c; sw = c.width; sh = c.height;
   }
   const cv = document.createElement('canvas'); cv.width = W; cv.height = h;
-  const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
+  const g = cv.getContext('2d', { willReadFrequently: true }); g.imageSmoothingQuality = 'high';
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, h);
   if (rot) { g.translate(W, 0); g.rotate(Math.PI / 2); g.drawImage(src, 0, 0, h, W); }
   else g.drawImage(src, 0, 0, W, h);
   const px = g.getImageData(0, 0, W, h).data;
-  let lum = new Float32Array(W * h);
+
+  // tone curve: contrast, brightness, then gamma to offset dot gain on thermal paper
+  const lut = new Float32Array(256);
   const cf = (259 * (s.contrast * 2.55 + 255)) / (255 * (259 - s.contrast * 2.55));
-  for (let i = 0; i < W * h; i++) {
-    let v = 0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2];
-    v = cf * (v - 128) + 128 + s.bright * 1.5;
-    lum[i] = v < 0 ? 0 : v > 255 ? 255 : v;
+  for (let v = 0; v < 256; v++) {
+    let x = cf * (v - 128) + 128 + s.bright * 1.5;
+    x = Math.min(255, Math.max(0, x));
+    lut[v] = 255 * Math.pow(x / 255, 1 / s.gamma);
   }
-  // Unsharp mask: brings back edges that the thermal head and dithering soften
+  let lum = new Float32Array(W * h);
+  for (let i = 0; i < W * h; i++) lum[i] = lut[Math.round(0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2])];
+
   if (s.sharp > 0) {
     const a = s.sharp / 50, out = new Float32Array(lum.length);
     for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
       const i = y * W + x;
-      const l = lum[x > 0 ? i - 1 : i], r = lum[x < W - 1 ? i + 1 : i], u = lum[y > 0 ? i - W : i], d = lum[y < h - 1 ? i + W : i];
-      const v = lum[i] + a * (4 * lum[i] - l - r - u - d) / 4;
+      const v = lum[i] + a * (4 * lum[i] - lum[x > 0 ? i - 1 : i] - lum[x < W - 1 ? i + 1 : i] - lum[y > 0 ? i - W : i] - lum[y < h - 1 ? i + W : i]) / 4;
       out[i] = v < 0 ? 0 : v > 255 ? 255 : v;
     }
     lum = out;
   }
+
   const bits = new Uint8Array(W * h);
   if (s.mode === 'threshold') { for (let i = 0; i < lum.length; i++) bits[i] = lum[i] < 128 ? 1 : 0; }
   else if (s.mode === 'atkinson') {
-    // Atkinson spreads only 3/4 of the error: crisper detail, less muddy shadows on thermal paper
     for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
       const i = y * W + x, o = lum[i], n = o < 128 ? 0 : 255, e = (o - n) / 8;
-      bits[i] = n === 0 ? 1 : 0;
+      bits[i] = n ? 0 : 1;
       if (x + 1 < W) lum[i + 1] += e;
       if (x + 2 < W) lum[i + 2] += e;
       if (y + 1 < h) { if (x > 0) lum[i + W - 1] += e; lum[i + W] += e; if (x + 1 < W) lum[i + W + 1] += e; }
       if (y + 2 < h) lum[i + 2 * W] += e;
     }
-  }
-  else {
-    for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
-      const i = y * W + x, o = lum[i], n = o < 128 ? 0 : 255, e = o - n;
-      bits[i] = n === 0 ? 1 : 0;
-      if (x + 1 < W) lum[i + 1] += e * 7 / 16;
-      if (y + 1 < h) { if (x > 0) lum[i + W - 1] += e * 3 / 16; lum[i + W] += e * 5 / 16; if (x + 1 < W) lum[i + W + 1] += e / 16; }
+  } else {
+    // serpentine Floyd–Steinberg: alternating direction avoids diagonal "worm" artefacts
+    for (let y = 0; y < h; y++) {
+      const rev = y & 1;
+      for (let k = 0; k < W; k++) {
+        const x = rev ? W - 1 - k : k, d = rev ? -1 : 1;
+        const i = y * W + x, o = lum[i], n = o < 128 ? 0 : 255, e = o - n;
+        bits[i] = n ? 0 : 1;
+        const xn = x + d, xp = x - d;
+        if (xn >= 0 && xn < W) lum[i + d] += e * 7 / 16;
+        if (y + 1 < h) {
+          if (xp >= 0 && xp < W) lum[i + W - d] += e * 3 / 16;
+          lum[i + W] += e * 5 / 16;
+          if (xn >= 0 && xn < W) lum[i + W + d] += e / 16;
+        }
+      }
     }
   }
   return { w: W, h, bits };
@@ -317,99 +392,132 @@ function processImage(img, s) {
 function toCanvas(p) {
   const cv = document.createElement('canvas'); cv.width = p.w; cv.height = p.h;
   const g = cv.getContext('2d'), id = g.createImageData(p.w, p.h);
-  for (let i = 0; i < p.bits.length; i++) { const v = p.bits[i] ? 20 : 251; id.data[i*4] = id.data[i*4+1] = id.data[i*4+2] = v; id.data[i*4+3] = 255; }
+  for (let i = 0; i < p.bits.length; i++) { const v = p.bits[i] ? 28 : 253; id.data[i*4] = id.data[i*4+1] = v; id.data[i*4+2] = p.bits[i] ? 30 : 248; id.data[i*4+3] = 255; }
   g.putImageData(id, 0, 0); return cv;
 }
 
-let pvTimer;
+let pvT;
 function preview() {
-  clearTimeout(pvTimer);
-  pvTimer = setTimeout(() => {
+  clearTimeout(pvT);
+  pvT = setTimeout(() => {
     const s = settings(), paper = $('paper'); paper.innerHTML = '';
+    if (!items.length) {
+      paper.innerHTML = '<label class="emptyp" for="files"><b>Přidej obrázky</b>Vyber jich klidně víc najednou. Tady uvidíš, jak vyjedou z tiskárny.</label>';
+      $('paperInfo').textContent = '384 bodů · 48 mm'; return;
+    }
     let mm = 0;
     items.forEach((it, i) => {
-      const p = processImage(it.img, s);
-      paper.appendChild(toCanvas(p)); mm += p.h / 8;
-      if (i < items.length - 1) { const g = document.createElement('div'); g.className = 'gap'; g.style.marginBlock = (s.gap * 1.1) + 'px'; paper.appendChild(g); mm += s.gap; }
+      const p = processImage(it.img, s); paper.appendChild(toCanvas(p)); mm += p.h / 8;
+      if (i < items.length - 1) { const g = document.createElement('div'); g.className = 'gap'; g.style.marginBlock = (s.gap * 1.6 / 2) + 'px'; paper.appendChild(g); mm += s.gap; }
     });
-    $('paperInfo').textContent = items.length
-      ? `${items.length} obr. × ${s.copies} kop. · cca ${Math.round((mm * s.copies) / 10)} cm pásky`
-      : 'Náhled pásky';
+    $('paperInfo').textContent = `${items.length} obr. × ${s.copies} · ${((mm * s.copies + s.gap * (s.copies - 1)) / 10).toFixed(1)} cm pásky`;
   }, 120);
 }
 
-function refreshPrint() { $('print').disabled = !(wch && items.length); $('test').disabled = !wch; }
-
-// One labelled grey ramp per energy level, so the right setting can be read off the paper
-$('test').onclick = async () => {
-  const s = settings();
-  $('test').disabled = $('print').disabled = true; $('bar').style.width = '0';
-  try {
-    await send([...C.state(), ...C.quality(), ...C.speed(s.speed), ...C.update()]);
-    for (let lvl = 1; lvl <= 7; lvl++) {
-      const cv = document.createElement('canvas'); cv.width = W; cv.height = 56;
-      const g = cv.getContext('2d');
-      g.fillStyle = '#fff'; g.fillRect(0, 0, W, 56);
-      const grad = g.createLinearGradient(70, 0, W, 0); grad.addColorStop(0, '#fff'); grad.addColorStop(1, '#000');
-      g.fillStyle = grad; g.fillRect(70, 8, W - 70, 40);
-      g.fillStyle = '#000'; g.font = 'bold 36px sans-serif'; g.fillText(String(lvl), 18, 42);
-      const img = new Image(); img.src = cv.toDataURL(); await img.decode();
-      const p = processImage(img, { ...s, mode: 'dither', sharp: 0, bright: 0, contrast: 0, rotate: false });
-      await send([...C.energy(ENERGY[lvl]), ...C.applyEnergy(), ...C.latticeStart(), ...jobBytes(p), ...C.latticeEnd()],
-        f => $('bar').style.width = ((lvl - 1 + f) / 7 * 100) + '%');
-    }
-    await send([...C.feed(90), ...C.state()]);
-    log('Zkušební proužek hotový. Nastav sytost podle čísla, které vypadá nejlépe.');
-  } catch (e) { log('Tisk selhal: ' + e.message); }
-  refreshPrint();
-};
+function refresh() {
+  const b = $('print');
+  b.disabled = printing || !wch || !items.length;
+  b.textContent = printing ? 'Tisknu…' : !wch ? 'Nejdřív připoj tiskárnu' : !items.length ? 'Přidej obrázky' : `Vytisknout ${items.length > 1 ? items.length + ' obrázky' : 'obrázek'}`;
+  if (items.length > 4 && !printing && wch) b.textContent = `Vytisknout ${items.length} obrázků`;
+  $('test').disabled = printing || !wch;
+}
 
 /* ---------- printing ---------- */
-function jobBytes(p) {
-  const out = [];
-  let blank = 0;
+// run-length row for cmd 0xBF; runs follow the printer's bit order (LSB first inside each byte)
+function rleRow(bits, y) {
+  const out = []; let cur = -1, cnt = 0;
+  const push = () => { while (cnt > 0) { const c = Math.min(127, cnt); out.push((cur << 7) | c); cnt -= c; } };
+  for (let bx = 0; bx < 48; bx++) for (let k = 7; k >= 0; k--) {
+    const v = bits[y * W + bx * 8 + k];
+    if (v === cur) cnt++; else { push(); cur = v; cnt = 1; }
+  }
+  push(); return out;
+}
+
+function jobBytes(p, s) {
+  const out = []; let blank = 0;
   for (let y = 0; y < p.h; y++) {
     const row = new Array(48).fill(0); let any = false;
     for (let x = 0; x < W; x++) if (p.bits[y * W + x]) { row[x >> 3] |= 1 << (x & 7); any = true; }
     if (!any) { blank++; continue; }
     if (blank) { out.push(...C.feed(blank)); blank = 0; }
+    if (s.rle) { const r = rleRow(p.bits, y); if (r.length < 48) { out.push(...C.rowRle(r)); continue; } }
     out.push(...C.row(row));
   }
   if (blank) out.push(...C.feed(blank));
   return out;
 }
 
-$('print').onclick = async () => {
-  const s = settings();
-  $('print').disabled = true; $('bar').style.width = '0';
-  try {
-    const parts = [];
-    for (let c = 0; c < s.copies; c++) items.forEach(it => parts.push(processImage(it.img, s)));
-    const head = [...C.state(), ...C.quality(), ...C.energy(s.energy), ...C.applyEnergy(), ...C.speed(s.speed), ...C.update()];
-    await send(head);
-    for (let i = 0; i < parts.length; i++) {
-      log(`Tisknu ${i + 1}/${parts.length}…`);
-      let bytes = [...C.latticeStart(), ...jobBytes(parts[i]), ...C.latticeEnd()];
-      const last = i === parts.length - 1;
-      if (!last) {
-        const gapDots = Math.round(s.gap * 8);
-        if (s.cut) bytes.push(...C.feed(Math.floor(gapDots / 2)), ...C.latticeStart(), ...C.row(new Array(48).fill(0x55)), ...C.latticeEnd(), ...C.feed(Math.ceil(gapDots / 2)));
-        else if (gapDots) bytes.push(...C.feed(gapDots));
-      }
-      await send(bytes, f => $('bar').style.width = ((i + f) / parts.length * 100) + '%');
-    }
-    await send([...C.feed(90), ...C.state()]);   // push the last image out past the tear edge
-    $('bar').style.width = '100%'; log('Hotovo.');
-  } catch (e) { log('Tisk selhal: ' + e.message); }
-  refreshPrint();
-};
+function header(s, energy) {
+  return [...C.state(), ...C.dpi(), ...C.energy(energy), ...C.drawMode(s.text), ...C.speed(s.speed), ...C.update()];
+}
 
-['mode','bright','contrast','gap','rotate','cut','copies','energy','speed','sharp'].forEach(id => $(id).addEventListener('input', () => {
-  $('oSharp').textContent = $('sharp').value;
+async function run(job) {
+  printing = true; refresh(); $('prog').style.width = '0';
+  await keepAwake(true);
+  try { await job(); log('Hotovo.'); }
+  catch (e) { log('Tisk selhal: ' + e.message); }
+  await keepAwake(false);
+  printing = false; refresh();
+}
+
+$('print').onclick = () => run(async () => {
+  const s = settings(), parts = [];
+  for (let c = 0; c < s.copies; c++) items.forEach(it => parts.push(processImage(it.img, s)));
+  await send(header(s, s.energy));
+  const gapDots = Math.round(s.gap * 8);
+  for (let i = 0; i < parts.length; i++) {
+    log(`Tisknu ${i + 1}/${parts.length}`);
+    const bytes = [...C.latticeStart(), ...jobBytes(parts[i], s), ...C.latticeEnd()];
+    if (i < parts.length - 1) {
+      if (s.cut) bytes.push(...C.feed(gapDots >> 1), ...C.latticeStart(), ...C.row(new Array(48).fill(0x33)), ...C.latticeEnd(), ...C.feed(gapDots - (gapDots >> 1)));
+      else if (gapDots) bytes.push(...C.feed(gapDots));
+    }
+    await send(bytes, f => $('prog').style.width = ((i + f) / parts.length * 100) + '%');
+  }
+  await send([...C.feed(90), ...C.state()]);
+  $('prog').style.width = '100%';
+});
+
+$('test').onclick = () => run(async () => {
+  const s = settings();
+  for (let lvl = 1; lvl <= 7; lvl++) {
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = 60;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, 60);
+    const grad = g.createLinearGradient(70, 0, W, 0); grad.addColorStop(0, '#fff'); grad.addColorStop(1, '#000');
+    g.fillStyle = grad; g.fillRect(70, 10, W - 70, 40);
+    g.fillStyle = '#000'; g.font = 'bold 38px sans-serif'; g.fillText(String(lvl), 18, 45);
+    const p = processImage(cv, { ...s, sharp: 0, bright: 0, contrast: 0, rotate: false });
+    await send([...header({ ...s, text: false }, ENERGY[lvl]), ...C.latticeStart(), ...jobBytes(p, s), ...C.latticeEnd()],
+      f => $('prog').style.width = ((lvl - 1 + f) / 7 * 100) + '%');
+  }
+  await send([...C.feed(90), ...C.state()]);
+  log('Vyber číslo, které vypadá nejlépe, a nastav ho jako Sytost tisku.');
+});
+
+/* ---------- controls ---------- */
+function labels() {
+  $('oEnergy').textContent = $('energy').value + ' / 7';
   $('oBright').textContent = $('bright').value; $('oContrast').textContent = $('contrast').value;
-  $('oGap').textContent = $('gap').value + ' mm'; $('oEnergy').textContent = $('energy').value + ' / 7';
-  preview();
-}));
+  $('oSharp').textContent = $('sharp').value; $('oGamma').textContent = (+$('gamma').value / 10).toFixed(1);
+}
+['energy','bright','contrast','sharp','gamma','mode','speed','copies','gap','rotate','cut','rle'].forEach(id =>
+  $(id).addEventListener('input', () => { labels(); preview(); }));
+
+/* remember the user's settings on this phone */
+const KEYS = ['energy','bright','contrast','sharp','gamma','mode','speed','gap','rotate','cut','rle'];
+try {
+  const saved = JSON.parse(localStorage.getItem('mx06') || '{}');
+  KEYS.forEach(k => { if (k in saved) { const el = $(k); if (el.type === 'checkbox') el.checked = saved[k]; else el.value = saved[k]; } });
+  if (saved.preset) { preset = saved.preset; document.querySelectorAll('#presets button').forEach(x => x.setAttribute('aria-pressed', x.dataset.p === preset)); }
+} catch (e) {}
+addEventListener('input', () => {
+  try { const o = { preset }; KEYS.forEach(k => { const el = $(k); o[k] = el.type === 'checkbox' ? el.checked : el.value; }); localStorage.setItem('mx06', JSON.stringify(o)); } catch (e) {}
+});
+$('presets').addEventListener('click', () => setTimeout(() => dispatchEvent(new Event('input')), 0));
+
+labels(); render();
 </script>
 </body>
 </html>
