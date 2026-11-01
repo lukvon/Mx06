@@ -26,7 +26,7 @@
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--body);-webkit-tap-highlight-color:transparent}
-.app{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 120px;display:grid;gap:18px}
+.app{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px 120px;display:grid;gap:14px}
 
 /* top bar */
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -39,9 +39,11 @@ body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--body);-webkit-tap
 @keyframes pulse{50%{opacity:.3}}
 
 /* receipt */
-.stage{display:grid;justify-items:center;padding:6px 0 2px}
-.slot{width:min(300px,82%);height:10px;border-radius:6px;background:var(--fg);opacity:.85;position:relative;z-index:2}
-.paper{width:min(276px,76%);margin-top:-5px;background:var(--paper);color:var(--ink);padding:16px 0 26px;max-height:46vh;overflow:auto;
+.stage{display:grid;justify-items:center;padding:6px 0 10px;position:sticky;top:env(safe-area-inset-top,0px);z-index:4;background:var(--bg);
+  margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding-inline:16px;border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.slot{width:min(360px,96%);height:10px;border-radius:6px;background:var(--fg);opacity:.85;position:relative;z-index:2}
+.paper{width:min(340px,90%);margin-top:-5px;background:var(--paper);color:var(--ink);padding:12px 0 22px;height:min(44vh,520px);overflow:auto;
   box-shadow:0 10px 30px rgba(0,0,0,.14);
   -webkit-mask:linear-gradient(#000 0 0) top/100% calc(100% - 8px) no-repeat,radial-gradient(circle 6px at 50% 100%,transparent 96%,#000) bottom/14px 9px repeat-x;
   mask:linear-gradient(#000 0 0) top/100% calc(100% - 8px) no-repeat,radial-gradient(circle 6px at 50% 100%,transparent 96%,#000) bottom/14px 9px repeat-x}
@@ -49,7 +51,7 @@ body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--body);-webkit-tap
 .paper .gap{border-top:1px dashed #c8c8bd;margin-inline:10px}
 .paper .emptyp{display:grid;gap:10px;justify-items:center;text-align:center;padding:34px 18px;color:#6d6d64;font-size:.9rem}
 .paper .emptyp b{font:700 1.05rem var(--display);color:#2a2a26}
-.meta{font:500 .75rem var(--mono);color:var(--muted);margin-top:10px;font-variant-numeric:tabular-nums}
+.meta{font:500 .75rem var(--mono);color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
 
 /* cards */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:12px}
@@ -129,11 +131,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
     <div class="meta" id="paperInfo">384 bodů · 48 mm</div>
   </div>
 
-  <section class="card">
-    <h2>Obrázky <small id="count"></small></h2>
-    <div class="thumbs" id="thumbs"></div>
-    <input type="file" id="files" accept="image/*" multiple>
-  </section>
 
   <section class="card">
     <h2>Styl tisku</h2>
@@ -169,6 +166,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
       </div>
     </details>
   </section>
+
+  <section class="card">
+    <h2>Obrázky <small id="count"></small></h2>
+    <div class="thumbs" id="thumbs"></div>
+    <input type="file" id="files" accept="image/*" multiple>
+  </section>
 </div>
 
 <div class="bar"><div class="in">
@@ -178,7 +181,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 
 <script>
 const W = 384;
-const VERSION = 'verze 5 (test)';
+const VERSION = 'verze 6 (test)';
 const SVC = 0xae30, WCH = 0xae01, NCH = 0xae02;
 const $ = id => document.getElementById(id);
 const log = m => { $('log').textContent += m + '\n'; $('log').scrollTop = 1e9; };
@@ -546,7 +549,7 @@ addEventListener('input', () => {
 $('presets').addEventListener('click', () => setTimeout(() => dispatchEvent(new Event('input')), 0));
 
 labels(); render();
-// test copy: no offline worker, so it can't affect the installed app
+// test copy: no offline worker
 </script>
 </body>
 </html>
