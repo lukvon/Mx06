@@ -48,6 +48,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   -webkit-mask:linear-gradient(#000 0 0) top/100% calc(100% - 8px) no-repeat,radial-gradient(circle 6px at 50% 100%,transparent 96%,#000) bottom/14px 9px repeat-x;
   mask:linear-gradient(#000 0 0) top/100% calc(100% - 8px) no-repeat,radial-gradient(circle 6px at 50% 100%,transparent 96%,#000) bottom/14px 9px repeat-x}
 .paper canvas{display:block;width:100%;image-rendering:pixelated}
+.paper .stripLab{font:500 .62rem var(--mono);color:#77776c;padding:4px 8px 3px}
+.hintx{font-size:.75rem;font-weight:400;color:var(--muted)}
 .paper .gap{border-top:1px dashed #c8c8bd;margin-inline:10px}
 .paper .emptyp{display:grid;gap:10px;justify-items:center;text-align:center;padding:34px 18px;color:#6d6d64;font-size:.9rem}
 .paper .emptyp b{font:700 1.05rem var(--display);color:#2a2a26}
@@ -141,6 +143,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
     </div>
     <div class="sl"><div class="lab">Sytost tisku <output id="oEnergy">5 / 7</output></div>
       <input type="range" id="energy" min="1" max="7" value="5"><div class="hint"><span>světlejší</span><span>tmavší</span></div></div>
+    <label class="fld">Velikost a rozlišení
+      <select id="strips"><option value="1" selected>1 pruh · 48 mm · 384 bodů</option><option value="2">2 pruhy vedle sebe · 96 mm · 768 bodů</option><option value="3">3 pruhy vedle sebe · 144 mm · 1152 bodů</option></select>
+      <span class="hintx">Víc pruhů = 2–3× ostřejší obrázek. Vytisknou se za sebou a slepíš je k sobě podélně.</span></label>
     <div class="sl"><div class="lab">Jas <output id="oBright">-5</output></div><input type="range" id="bright" min="-80" max="80" value="-5"></div>
     <div class="sl"><div class="lab">Kontrast <output id="oContrast">15</output></div><input type="range" id="contrast" min="-60" max="80" value="15"></div>
 
@@ -181,7 +186,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 
 <script>
 const W = 384;
-const VERSION = 'verze 6 (test)';
+const VERSION = 'verze 7 (test)';
 const SVC = 0xae30, WCH = 0xae01, NCH = 0xae02;
 const $ = id => document.getElementById(id);
 const log = m => { $('log').textContent += m + '\n'; $('log').scrollTop = 1e9; };
@@ -205,6 +210,7 @@ const C = {
   row: b => cmd(0xa2, b),
   rowRle: b => cmd(0xbf, b),
 };
+const INK = [0, 170, 135, 100, 70, 48, 32, 18];   // how dark the dots come out at each darkness level, for the preview
 const ENERGY = [0, 0x1800, 0x2800, 0x3800, 0x4c00, 0x6400, 0x8400, 0xb000];
 
 /* ---------- Bluetooth ---------- */
@@ -320,15 +326,16 @@ function settings() {
     bright: +$('bright').value, contrast: +$('contrast').value,
     rotate: $('rotate').checked, cut: $('cut').checked, rle: $('rle').checked,
     gap: Math.max(0, Math.min(30, +$('gap').value || 0)), copies: Math.max(1, Math.min(20, +$('copies').value || 1)),
-    energy: ENERGY[+$('energy').value], speed: +$('speed').value, text: preset === 'text'
+    energy: ENERGY[+$('energy').value], ink: INK[+$('energy').value], strips: +$('strips').value, speed: +$('speed').value, text: preset === 'text'
   };
 }
 
 /* ---------- image processing ---------- */
 // Resize + rotate + greyscale is the slow part and doesn't depend on the sliders, so it is cached per image
 const grayCache = new WeakMap();
-function baseGray(img, rotate) {
-  const key = rotate ? 'r' : 'n';
+function baseGray(img, rotate, n = 1) {
+  const W = 384 * n;
+  const key = (rotate ? 'r' : 'n') + n;
   let c = grayCache.get(img);
   if (c && c[key]) return c[key];
   const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
@@ -357,7 +364,8 @@ function baseGray(img, rotate) {
 }
 
 function processImage(img, s) {
-  const { h, gray } = baseGray(img, s.rotate);
+  const W = 384 * (s.strips || 1);
+  const { h, gray } = baseGray(img, s.rotate, s.strips || 1);
 
   // tone curve: contrast, brightness, then gamma to offset dot gain on thermal paper
   const lut = new Float32Array(256);
@@ -412,10 +420,22 @@ function processImage(img, s) {
   return { w: W, h, bits };
 }
 
-function toCanvas(p) {
+// A wide picture printed as several 48 mm strips that are glued side by side: n× more dots across
+function splitStrips(p) {
+  const n = p.w / W; if (n === 1) return [p];
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const bits = new Uint8Array(W * p.h);
+    for (let y = 0; y < p.h; y++) bits.set(p.bits.subarray(y * p.w + k * W, y * p.w + k * W + W), y * W);
+    out.push({ w: W, h: p.h, bits, strip: k + 1, of: n });
+  }
+  return out;
+}
+
+function toCanvas(p, ink = 28) {
   const cv = document.createElement('canvas'); cv.width = p.w; cv.height = p.h;
   const g = cv.getContext('2d'), id = g.createImageData(p.w, p.h);
-  for (let i = 0; i < p.bits.length; i++) { const v = p.bits[i] ? 28 : 253; id.data[i*4] = id.data[i*4+1] = v; id.data[i*4+2] = p.bits[i] ? 30 : 248; id.data[i*4+3] = 255; }
+  for (let i = 0; i < p.bits.length; i++) { const v = p.bits[i] ? ink : 253; id.data[i*4] = id.data[i*4+1] = v; id.data[i*4+2] = p.bits[i] ? ink + 2 : 248; id.data[i*4+3] = 255; }
   g.putImageData(id, 0, 0); return cv;
 }
 
@@ -436,7 +456,12 @@ function preview() {
       let p;
       try { p = processImage(items[i].img, s); }
       catch (e) { $('paperInfo').textContent = 'Náhled se nepovedl: ' + e.message; log('Náhled: ' + e.message); return; }
-      frag.appendChild(toCanvas(p)); mm += p.h / 8;
+      const parts = splitStrips(p);
+      parts.forEach((q, k) => {
+        if (q.of) { const t = document.createElement('div'); t.className = 'stripLab'; t.textContent = `obrázek ${i + 1} · pruh ${q.strip}/${q.of}`; frag.appendChild(t); }
+        frag.appendChild(toCanvas(q, s.ink)); mm += q.h / 8;
+        if (k < parts.length - 1) { const g = document.createElement('div'); g.className = 'gap'; g.style.marginBlock = (s.gap * 1.6 / 2) + 'px'; frag.appendChild(g); mm += s.gap; }
+      });
       if (i < items.length - 1) { const g = document.createElement('div'); g.className = 'gap'; g.style.marginBlock = (s.gap * 1.6 / 2) + 'px'; frag.appendChild(g); mm += s.gap; }
     }
     if (run !== pvRun) return;
@@ -494,7 +519,7 @@ async function run(job) {
 
 $('print').onclick = () => run(async () => {
   const s = settings(), parts = [];
-  for (let c = 0; c < s.copies; c++) items.forEach(it => parts.push(processImage(it.img, s)));
+  for (let c = 0; c < s.copies; c++) items.forEach(it => parts.push(...splitStrips(processImage(it.img, s))));
   await send(header(s, s.energy));
   const gapDots = Math.round(s.gap * 8);
   for (let i = 0; i < parts.length; i++) {
@@ -519,7 +544,7 @@ $('test').onclick = () => run(async () => {
     const grad = g.createLinearGradient(70, 0, W, 0); grad.addColorStop(0, '#fff'); grad.addColorStop(1, '#000');
     g.fillStyle = grad; g.fillRect(70, 10, W - 70, 40);
     g.fillStyle = '#000'; g.font = 'bold 38px sans-serif'; g.fillText(String(lvl), 18, 45);
-    const p = processImage(cv, { ...s, sharp: 0, bright: 0, contrast: 0, rotate: false });
+    const p = processImage(cv, { ...s, sharp: 0, bright: 0, contrast: 0, rotate: false, strips: 1 });
     await send([...header({ ...s, text: false }, ENERGY[lvl]), ...C.latticeStart(), ...jobBytes(p, s), ...C.latticeEnd()],
       f => $('prog').style.width = ((lvl - 1 + f) / 7 * 100) + '%');
   }
@@ -533,11 +558,11 @@ function labels() {
   $('oBright').textContent = $('bright').value; $('oContrast').textContent = $('contrast').value;
   $('oSharp').textContent = $('sharp').value; $('oGamma').textContent = (+$('gamma').value / 10).toFixed(1);
 }
-['energy','bright','contrast','sharp','gamma','mode','speed','copies','gap','rotate','cut','rle'].forEach(id =>
+['energy','bright','contrast','sharp','gamma','mode','speed','copies','gap','rotate','cut','rle','strips'].forEach(id =>
   ['input', 'change'].forEach(ev => $(id).addEventListener(ev, () => { labels(); preview(); })));
 
 /* remember the user's settings on this phone */
-const KEYS = ['energy','bright','contrast','sharp','gamma','mode','speed','gap','rotate','cut','rle'];
+const KEYS = ['strips','energy','bright','contrast','sharp','gamma','mode','speed','gap','rotate','cut','rle'];
 try {
   const saved = JSON.parse(localStorage.getItem('mx06v5') || '{}');
   KEYS.forEach(k => { if (k in saved) { const el = $(k); if (el.type === 'checkbox') el.checked = saved[k]; else el.value = saved[k]; } });
