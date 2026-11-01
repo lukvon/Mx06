@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16201d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Tisk na MX06</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@500&display=swap">
@@ -150,12 +153,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
       <div class="adv">
         <div class="sl"><div class="lab">Kompenzace rozpíjení <output id="oGamma">1.5</output></div>
           <input type="range" id="gamma" min="10" max="25" value="15"><div class="hint"><span>vypnuto</span><span>světlejší stíny</span></div></div>
-        <div class="sl"><div class="lab">Doostření <output id="oSharp">30</output></div><input type="range" id="sharp" min="0" max="100" value="30"></div>
+        <div class="sl"><div class="lab">Doostření <output id="oSharp">70</output></div><input type="range" id="sharp" min="0" max="150" value="70"></div>
         <div class="two">
           <label class="fld">Rastr
             <select id="mode"><option value="atkinson">Ostrý (Atkinson)</option><option value="fs">Jemný (Floyd–Steinberg)</option><option value="threshold">Bez rastru</option></select></label>
           <label class="fld">Rychlost
-            <select id="speed"><option value="32">Rychlá</option><option value="48" selected>Normální</option><option value="64">Pomalá, tmavší</option><option value="96">Nejpomalejší</option></select></label>
+            <select id="speed"><option value="32">Rychlá</option><option value="48">Normální</option><option value="64">Pomalá</option><option value="96" selected>Nejpomalejší (doporučeno)</option></select></label>
           <label class="fld">Kopie<input type="number" id="copies" min="1" max="20" value="1"></label>
           <label class="fld">Mezera (mm)<input type="number" id="gap" min="0" max="30" value="5"></label>
         </div>
@@ -176,6 +179,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 
 <script>
 const W = 384;
+const VERSION = 'verze 4';
 const SVC = 0xae30, WCH = 0xae01, NCH = 0xae02;
 const $ = id => document.getElementById(id);
 const log = m => { $('log').textContent += m + '\n'; $('log').scrollTop = 1e9; };
@@ -292,9 +296,9 @@ function render() {
 
 /* ---------- presets ---------- */
 const PRESETS = {
-  photo: { mode: 'atkinson', sharp: 30, gamma: 15, contrast: 10, bright: 0 },
-  draw:  { mode: 'atkinson', sharp: 60, gamma: 12, contrast: 30, bright: 10 },
-  text:  { mode: 'threshold', sharp: 40, gamma: 10, contrast: 40, bright: 10 },
+  photo: { mode: 'atkinson', sharp: 70, gamma: 15, contrast: 10, bright: 0 },
+  draw:  { mode: 'atkinson', sharp: 100, gamma: 12, contrast: 30, bright: 10 },
+  text:  { mode: 'threshold', sharp: 80, gamma: 10, contrast: 40, bright: 10 },
 };
 let preset = 'photo';
 $('presets').onclick = e => {
@@ -317,17 +321,22 @@ function settings() {
 }
 
 /* ---------- image processing ---------- */
-function processImage(img, s) {
+// Resize + rotate + greyscale is the slow part and doesn't depend on the sliders, so it is cached per image
+const grayCache = new WeakMap();
+function baseGray(img, rotate) {
+  const key = rotate ? 'r' : 'n';
+  let c = grayCache.get(img);
+  if (c && c[key]) return c[key];
   const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
-  const rot = s.rotate && iw > ih;
+  const rot = rotate && iw > ih;
   const h = Math.max(1, Math.round((rot ? iw : ih) * W / (rot ? ih : iw)));
   // halve in steps so detail survives the big downscale
   let src = img, sw = iw, sh = ih;
   const tw = rot ? h : W;
   while (sw / 2 > tw * 1.5) {
-    const c = document.createElement('canvas'); c.width = Math.round(sw / 2); c.height = Math.round(sh / 2);
-    const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(src, 0, 0, c.width, c.height);
-    src = c; sw = c.width; sh = c.height;
+    const cc = document.createElement('canvas'); cc.width = Math.round(sw / 2); cc.height = Math.round(sh / 2);
+    const cg = cc.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(src, 0, 0, cc.width, cc.height);
+    src = cc; sw = cc.width; sh = cc.height;
   }
   const cv = document.createElement('canvas'); cv.width = W; cv.height = h;
   const g = cv.getContext('2d', { willReadFrequently: true }); g.imageSmoothingQuality = 'high';
@@ -335,6 +344,16 @@ function processImage(img, s) {
   if (rot) { g.translate(W, 0); g.rotate(Math.PI / 2); g.drawImage(src, 0, 0, h, W); }
   else g.drawImage(src, 0, 0, W, h);
   const px = g.getImageData(0, 0, W, h).data;
+  const gray = new Uint8Array(W * h);
+  for (let i = 0; i < W * h; i++) gray[i] = Math.round(0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2]);
+  const res = { h, gray };
+  if (!c) { c = {}; grayCache.set(img, c); }
+  c[key] = res;
+  return res;
+}
+
+function processImage(img, s) {
+  const { h, gray } = baseGray(img, s.rotate);
 
   // tone curve: contrast, brightness, then gamma to offset dot gain on thermal paper
   const lut = new Float32Array(256);
@@ -345,7 +364,7 @@ function processImage(img, s) {
     lut[v] = 255 * Math.pow(x / 255, 1 / s.gamma);
   }
   let lum = new Float32Array(W * h);
-  for (let i = 0; i < W * h; i++) lum[i] = lut[Math.round(0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2])];
+  for (let i = 0; i < W * h; i++) lum[i] = lut[gray[i]];
 
   if (s.sharp > 0) {
     const a = s.sharp / 50, out = new Float32Array(lum.length);
@@ -396,22 +415,27 @@ function toCanvas(p) {
   g.putImageData(id, 0, 0); return cv;
 }
 
-let pvT;
+let pvT, pvRun = 0;
 function preview() {
   clearTimeout(pvT);
-  pvT = setTimeout(() => {
-    const s = settings(), paper = $('paper'); paper.innerHTML = '';
+  pvT = setTimeout(async () => {
+    const run = ++pvRun, s = settings(), paper = $('paper');
     if (!items.length) {
       paper.innerHTML = '<label class="emptyp" for="files"><b>Přidej obrázky</b>Vyber jich klidně víc najednou. Tady uvidíš, jak vyjedou z tiskárny.</label>';
-      $('paperInfo').textContent = '384 bodů · 48 mm'; return;
+      $('paperInfo').textContent = '384 bodů · 48 mm · ' + VERSION; return;
     }
-    let mm = 0;
-    items.forEach((it, i) => {
-      const p = processImage(it.img, s); paper.appendChild(toCanvas(p)); mm += p.h / 8;
-      if (i < items.length - 1) { const g = document.createElement('div'); g.className = 'gap'; g.style.marginBlock = (s.gap * 1.6 / 2) + 'px'; paper.appendChild(g); mm += s.gap; }
-    });
-    $('paperInfo').textContent = `${items.length} obr. × ${s.copies} · ${((mm * s.copies + s.gap * (s.copies - 1)) / 10).toFixed(1)} cm pásky`;
-  }, 120);
+    $('paperInfo').textContent = 'Přepočítávám náhled…';
+    const frag = document.createDocumentFragment(); let mm = 0;
+    for (let i = 0; i < items.length; i++) {
+      await new Promise(r => requestAnimationFrame(r));
+      if (run !== pvRun) return;                       // settings changed again, start over
+      const p = processImage(items[i].img, s); frag.appendChild(toCanvas(p)); mm += p.h / 8;
+      if (i < items.length - 1) { const g = document.createElement('div'); g.className = 'gap'; g.style.marginBlock = (s.gap * 1.6 / 2) + 'px'; frag.appendChild(g); mm += s.gap; }
+    }
+    if (run !== pvRun) return;
+    const top = paper.scrollTop; paper.replaceChildren(frag); paper.scrollTop = top;
+    $('paperInfo').textContent = `${items.length} obr. × ${s.copies} · ${((mm * s.copies + s.gap * (s.copies - 1)) / 10).toFixed(1)} cm pásky · ${VERSION}`;
+  }, 80);
 }
 
 function refresh() {
@@ -503,21 +527,22 @@ function labels() {
   $('oSharp').textContent = $('sharp').value; $('oGamma').textContent = (+$('gamma').value / 10).toFixed(1);
 }
 ['energy','bright','contrast','sharp','gamma','mode','speed','copies','gap','rotate','cut','rle'].forEach(id =>
-  $(id).addEventListener('input', () => { labels(); preview(); }));
+  ['input', 'change'].forEach(ev => $(id).addEventListener(ev, () => { labels(); preview(); })));
 
 /* remember the user's settings on this phone */
 const KEYS = ['energy','bright','contrast','sharp','gamma','mode','speed','gap','rotate','cut','rle'];
 try {
-  const saved = JSON.parse(localStorage.getItem('mx06') || '{}');
+  const saved = JSON.parse(localStorage.getItem('mx06v2') || '{}');
   KEYS.forEach(k => { if (k in saved) { const el = $(k); if (el.type === 'checkbox') el.checked = saved[k]; else el.value = saved[k]; } });
   if (saved.preset) { preset = saved.preset; document.querySelectorAll('#presets button').forEach(x => x.setAttribute('aria-pressed', x.dataset.p === preset)); }
 } catch (e) {}
 addEventListener('input', () => {
-  try { const o = { preset }; KEYS.forEach(k => { const el = $(k); o[k] = el.type === 'checkbox' ? el.checked : el.value; }); localStorage.setItem('mx06', JSON.stringify(o)); } catch (e) {}
+  try { const o = { preset }; KEYS.forEach(k => { const el = $(k); o[k] = el.type === 'checkbox' ? el.checked : el.value; }); localStorage.setItem('mx06v2', JSON.stringify(o)); } catch (e) {}
 });
 $('presets').addEventListener('click', () => setTimeout(() => dispatchEvent(new Event('input')), 0));
 
 labels(); render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
