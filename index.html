@@ -98,11 +98,14 @@ select,input[type=number]{font:inherit;padding:8px;border-radius:6px;border:1px 
       <h2>3 · Nastavení</h2>
       <div class="grid2">
         <label class="f"><span>Režim <output></output></span>
-          <select id="mode"><option value="dither">Fotka (rastr)</option><option value="threshold">Text / kresba (ostře)</option></select></label>
+          <select id="mode"><option value="atkinson">Fotka – ostrá (doporučeno)</option><option value="dither">Fotka – jemný rastr</option><option value="threshold">Text / kresba (černobíle)</option></select></label>
+        <label class="f"><span>Doostření <output id="oSharp">30</output></span><input type="range" id="sharp" min="0" max="100" value="30"></label>
         <label class="f"><span>Počet kopií</span><input type="number" id="copies" min="1" max="20" value="1"></label>
         <label class="f"><span>Jas <output id="oBright">0</output></span><input type="range" id="bright" min="-80" max="80" value="0"></label>
         <label class="f"><span>Kontrast <output id="oContrast">0</output></span><input type="range" id="contrast" min="-60" max="80" value="10"></label>
-        <label class="f"><span>Sytost tisku <output id="oEnergy">střední</output></span><input type="range" id="energy" min="1" max="3" value="2"></label>
+        <label class="f"><span>Sytost tisku <output id="oEnergy">4 / 7</output></span><input type="range" id="energy" min="1" max="7" value="4"></label>
+        <label class="f"><span>Rychlost tisku</span>
+          <select id="speed"><option value="45">Rychlá (světlejší)</option><option value="32" selected>Normální</option><option value="20">Pomalá (tmavší)</option><option value="12">Nejpomalejší (nejtmavší)</option></select></label>
         <label class="f"><span>Mezera mezi obrázky <output id="oGap">5 mm</output></span><input type="range" id="gap" min="0" max="30" value="5"></label>
       </div>
       <label class="check"><input type="checkbox" id="rotate" checked> Otočit obrázky na šířku pásky, když jsou širší než vyšší</label>
@@ -112,6 +115,7 @@ select,input[type=number]{font:inherit;padding:8px;border-radius:6px;border:1px 
     <section>
       <h2>4 · Tisk</h2>
       <button class="primary" id="print" disabled>Vytisknout vše</button>
+      <button id="test" disabled>Vytisknout zkušební proužek sytosti (1–7)</button>
       <div class="progress"><i id="bar"></i></div>
       <pre id="log"></pre>
     </section>
@@ -148,7 +152,7 @@ const C = {
 };
 
 /* ---------- Bluetooth ---------- */
-let dev = null, wch = null, paused = false, chunk = 180;
+let dev = null, wch = null, paused = false, chunk = 180, flowCtl = false;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function setStatus(on, txt) { $('status').classList.toggle('on', on); $('statusTxt').textContent = txt; $('connect').disabled = on; $('disconnect').disabled = !on; refreshPrint(); }
 
@@ -170,6 +174,7 @@ $('connect').onclick = async () => {
       await n.startNotifications();
       n.addEventListener('characteristicvaluechanged', e => {
         const v = new Uint8Array(e.target.value.buffer);
+        flowCtl = true;                                // printer talks back, so it will also tell us when to pause
         if (v[2] === 0xae) paused = v[6] === 0x10;   // printer buffer full / free again
       });
     } catch (e) { log('Bez zpětné vazby z tiskárny, tisknu pomaleji.'); }
@@ -179,18 +184,32 @@ $('connect').onclick = async () => {
 };
 $('disconnect').onclick = () => dev && dev.gatt.connected && dev.gatt.disconnect();
 
+// With buffer feedback from the printer we can stream as fast as Bluetooth allows, so the motor never waits for data
 async function send(bytes, onProgress) {
   const buf = Uint8Array.from(bytes);
+  let n = 0;
   for (let i = 0; i < buf.length;) {
-    while (paused) await sleep(30);
+    while (paused) await sleep(15);
     const part = buf.subarray(i, i + chunk);
     try { await wch.writeValueWithoutResponse(part); }
     catch (e) { if (chunk > 20) { chunk = 20; continue; } throw e; }
     i += part.length;
-    if (onProgress) onProgress(i / buf.length);
-    await sleep(chunk > 20 ? 12 : 4);
+    if (onProgress && (++n % 8 === 0 || i >= buf.length)) onProgress(i / buf.length);
+    if (!flowCtl) await sleep(chunk > 20 ? 10 : 3);
+    else if (n % 16 === 0) await sleep(1);
   }
 }
+
+/* ---------- keep the screen on while printing (screen-off makes Android suspend Bluetooth from the page) ---------- */
+let wakeLock = null, busy = false;
+async function keepAwake(on) {
+  busy = on;
+  try {
+    if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) { log('Displej nejde držet zapnutý, nenech telefon během tisku zhasnout.'); }
+}
+document.addEventListener('visibilitychange', () => { if (busy && document.visibilityState === 'visible') keepAwake(true); });
 
 /* ---------- images ---------- */
 let items = [];   // {name, img, url}
@@ -225,12 +244,13 @@ function render() {
 
 function settings() {
   return {
-    mode: $('mode').value, bright: +$('bright').value, contrast: +$('contrast').value,
+    mode: $('mode').value, sharp: +$('sharp').value, bright: +$('bright').value, contrast: +$('contrast').value,
     rotate: $('rotate').checked, cut: $('cut').checked,
     gap: +$('gap').value, copies: Math.max(1, Math.min(20, +$('copies').value || 1)),
-    energy: [0, 0x2000, 0x3a00, 0x5800][+$('energy').value]
+    energy: ENERGY[+$('energy').value], speed: +$('speed').value
   };
 }
+const ENERGY = [0, 0x1800, 0x2800, 0x3800, 0x4c00, 0x6400, 0x8400, 0xb000];
 
 // Returns {w, h, bits: Uint8Array (1 = black)}
 function processImage(img, s) {
@@ -238,21 +258,51 @@ function processImage(img, s) {
   const rot = s.rotate && iw > ih;
   const srcW = rot ? ih : iw, srcH = rot ? iw : ih;
   const h = Math.max(1, Math.round(srcH * W / srcW));
+  // Downscale in halving steps: a single big jump to 384 px loses fine detail and looks blocky
+  let src = img, sw = rot ? srcH : srcW, sh = rot ? srcW : srcH;   // unrotated source size
+  const tw = rot ? h : W, th = rot ? W : h;                          // unrotated target size
+  while (sw / 2 > tw * 1.5) {
+    const c = document.createElement('canvas'); c.width = Math.round(sw / 2); c.height = Math.round(sh / 2);
+    const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(src, 0, 0, c.width, c.height);
+    src = c; sw = c.width; sh = c.height;
+  }
   const cv = document.createElement('canvas'); cv.width = W; cv.height = h;
-  const g = cv.getContext('2d');
+  const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, h);
-  if (rot) { g.translate(W, 0); g.rotate(Math.PI / 2); g.drawImage(img, 0, 0, h, W); }
-  else g.drawImage(img, 0, 0, W, h);
+  if (rot) { g.translate(W, 0); g.rotate(Math.PI / 2); g.drawImage(src, 0, 0, h, W); }
+  else g.drawImage(src, 0, 0, W, h);
   const px = g.getImageData(0, 0, W, h).data;
-  const lum = new Float32Array(W * h);
+  let lum = new Float32Array(W * h);
   const cf = (259 * (s.contrast * 2.55 + 255)) / (255 * (259 - s.contrast * 2.55));
   for (let i = 0; i < W * h; i++) {
     let v = 0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2];
     v = cf * (v - 128) + 128 + s.bright * 1.5;
     lum[i] = v < 0 ? 0 : v > 255 ? 255 : v;
   }
+  // Unsharp mask: brings back edges that the thermal head and dithering soften
+  if (s.sharp > 0) {
+    const a = s.sharp / 50, out = new Float32Array(lum.length);
+    for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      const l = lum[x > 0 ? i - 1 : i], r = lum[x < W - 1 ? i + 1 : i], u = lum[y > 0 ? i - W : i], d = lum[y < h - 1 ? i + W : i];
+      const v = lum[i] + a * (4 * lum[i] - l - r - u - d) / 4;
+      out[i] = v < 0 ? 0 : v > 255 ? 255 : v;
+    }
+    lum = out;
+  }
   const bits = new Uint8Array(W * h);
   if (s.mode === 'threshold') { for (let i = 0; i < lum.length; i++) bits[i] = lum[i] < 128 ? 1 : 0; }
+  else if (s.mode === 'atkinson') {
+    // Atkinson spreads only 3/4 of the error: crisper detail, less muddy shadows on thermal paper
+    for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x, o = lum[i], n = o < 128 ? 0 : 255, e = (o - n) / 8;
+      bits[i] = n === 0 ? 1 : 0;
+      if (x + 1 < W) lum[i + 1] += e;
+      if (x + 2 < W) lum[i + 2] += e;
+      if (y + 1 < h) { if (x > 0) lum[i + W - 1] += e; lum[i + W] += e; if (x + 1 < W) lum[i + W + 1] += e; }
+      if (y + 2 < h) lum[i + 2 * W] += e;
+    }
+  }
   else {
     for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
       const i = y * W + x, o = lum[i], n = o < 128 ? 0 : 255, e = o - n;
@@ -288,7 +338,31 @@ function preview() {
   }, 120);
 }
 
-function refreshPrint() { $('print').disabled = !(wch && items.length); }
+function refreshPrint() { $('print').disabled = !(wch && items.length); $('test').disabled = !wch; }
+
+// One labelled grey ramp per energy level, so the right setting can be read off the paper
+$('test').onclick = async () => {
+  const s = settings();
+  $('test').disabled = $('print').disabled = true; $('bar').style.width = '0';
+  try {
+    await send([...C.state(), ...C.quality(), ...C.speed(s.speed), ...C.update()]);
+    for (let lvl = 1; lvl <= 7; lvl++) {
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = 56;
+      const g = cv.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, W, 56);
+      const grad = g.createLinearGradient(70, 0, W, 0); grad.addColorStop(0, '#fff'); grad.addColorStop(1, '#000');
+      g.fillStyle = grad; g.fillRect(70, 8, W - 70, 40);
+      g.fillStyle = '#000'; g.font = 'bold 36px sans-serif'; g.fillText(String(lvl), 18, 42);
+      const img = new Image(); img.src = cv.toDataURL(); await img.decode();
+      const p = processImage(img, { ...s, mode: 'dither', sharp: 0, bright: 0, contrast: 0, rotate: false });
+      await send([...C.energy(ENERGY[lvl]), ...C.applyEnergy(), ...C.latticeStart(), ...jobBytes(p), ...C.latticeEnd()],
+        f => $('bar').style.width = ((lvl - 1 + f) / 7 * 100) + '%');
+    }
+    await send([...C.feed(90), ...C.state()]);
+    log('Zkušební proužek hotový. Nastav sytost podle čísla, které vypadá nejlépe.');
+  } catch (e) { log('Tisk selhal: ' + e.message); }
+  refreshPrint();
+};
 
 /* ---------- printing ---------- */
 function jobBytes(p) {
@@ -311,7 +385,7 @@ $('print').onclick = async () => {
   try {
     const parts = [];
     for (let c = 0; c < s.copies; c++) items.forEach(it => parts.push(processImage(it.img, s)));
-    const head = [...C.state(), ...C.quality(), ...C.energy(s.energy), ...C.applyEnergy(), ...C.speed(32), ...C.update()];
+    const head = [...C.state(), ...C.quality(), ...C.energy(s.energy), ...C.applyEnergy(), ...C.speed(s.speed), ...C.update()];
     await send(head);
     for (let i = 0; i < parts.length; i++) {
       log(`Tisknu ${i + 1}/${parts.length}…`);
@@ -330,9 +404,10 @@ $('print').onclick = async () => {
   refreshPrint();
 };
 
-['mode','bright','contrast','gap','rotate','cut','copies','energy'].forEach(id => $(id).addEventListener('input', () => {
+['mode','bright','contrast','gap','rotate','cut','copies','energy','speed','sharp'].forEach(id => $(id).addEventListener('input', () => {
+  $('oSharp').textContent = $('sharp').value;
   $('oBright').textContent = $('bright').value; $('oContrast').textContent = $('contrast').value;
-  $('oGap').textContent = $('gap').value + ' mm'; $('oEnergy').textContent = ['', 'slabá', 'střední', 'silná'][$('energy').value];
+  $('oGap').textContent = $('gap').value + ' mm'; $('oEnergy').textContent = $('energy').value + ' / 7';
   preview();
 }));
 </script>
