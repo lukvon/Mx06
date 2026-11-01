@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tisk na MX06</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one column control panel; on the side a strip of "thermal paper" showing exactly what will print */
+:root{
+  --bg:#eef0ee; --panel:#ffffff; --fg:#1d2321; --muted:#5d6764; --line:#d5dbd8;
+  --accent:#0f7a5c; --accent-fg:#ffffff; --paper:#fbfbf7; --danger:#b3261e;
+  --display:"Archivo",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141917; --panel:#1d2421; --fg:#e7ece9; --muted:#9aa6a1; --line:#2f3a36;
+  --accent:#3fbf93; --accent-fg:#0b1a14; --paper:#f4f4ee; --danger:#ff8a80; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--display);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:980px;margin:0 auto;display:grid;gap:20px;grid-template-columns:minmax(0,1fr) 300px;align-items:start}
+@media (max-width:760px){.wrap{grid-template-columns:minmax(0,1fr)}}
+header{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{margin:0;font-weight:800;font-size:1.6rem;letter-spacing:-.01em}
+h1 small{display:block;font:400 .8rem var(--mono);color:var(--muted);letter-spacing:.02em}
+.status{font:600 .8rem var(--mono);padding:6px 10px;border-radius:99px;border:1px solid var(--line);display:flex;gap:8px;align-items:center}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.status.on .dot{background:var(--accent)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px}
+h2{margin:0;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+button,.filebtn{font:600 .95rem var(--display);border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:11px 14px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.row>button{flex:1 1 140px}
+#files{display:none}
+.list{display:grid;gap:8px}
+.item{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px}
+.item img{width:56px;height:56px;object-fit:cover;border-radius:4px;background:var(--paper)}
+.item .name{font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .meta{font:.75rem var(--mono);color:var(--muted)}
+.item .btns{display:flex;gap:4px}
+.item .btns button{padding:6px 9px;font-size:.85rem}
+.empty{color:var(--muted);font-size:.9rem}
+label.f{display:grid;gap:4px;font-size:.85rem}
+label.f span{display:flex;justify-content:space-between}
+label.f output{font:600 .8rem var(--mono);color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+select,input[type=number]{font:inherit;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.check{display:flex;gap:8px;align-items:center;font-size:.9rem}
+.check input{accent-color:var(--accent);width:18px;height:18px}
+.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+#log{font:.75rem/1.5 var(--mono);color:var(--muted);max-height:120px;overflow:auto;white-space:pre-wrap;margin:0}
+.paperbox{position:sticky;top:12px}
+.paper{background:var(--paper);border-radius:2px;padding:14px 0 30px;box-shadow:0 1px 0 var(--line),0 8px 24px rgba(0,0,0,.12);
+  -webkit-mask:radial-gradient(circle 5px at 50% 100%,transparent 98%,#000) 0 0/12px 100% repeat-x;mask:radial-gradient(circle 5px at 50% 100%,transparent 98%,#000) 0 0/12px 100% repeat-x;
+  max-height:70vh;overflow:auto}
+.paper canvas{display:block;width:100%;image-rendering:pixelated}
+.paper .gap{border-top:1px dashed #c9c9bf;margin:0 8px}
+.paperbox p{font:.75rem var(--mono);color:var(--muted);margin:8px 2px 0}
+.warn{border-left:3px solid var(--danger);padding:8px 12px;font-size:.88rem;background:var(--panel);border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Tisk na MX06<small>384 px · 203 dpi · Bluetooth</small></h1>
+    <div class="status" id="status"><i class="dot"></i><span id="statusTxt">Nepřipojeno</span></div>
+  </header>
+
+  <main style="display:grid;gap:20px;min-width:0">
+    <div class="warn" id="noBt" hidden>Tento prohlížeč neumí Bluetooth. Otevři stránku v Chrome na Androidu přes adresu https://.</div>
+
+    <section>
+      <h2>1 · Tiskárna</h2>
+      <div class="row">
+        <button class="primary" id="connect">Připojit tiskárnu</button>
+        <button id="disconnect" disabled>Odpojit</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>2 · Obrázky</h2>
+      <div class="row">
+        <label class="filebtn" for="files" style="flex:1 1 140px;text-align:center">Přidat obrázky…</label>
+        <input type="file" id="files" accept="image/*" multiple>
+        <button id="clear">Vymazat vše</button>
+      </div>
+      <div class="list" id="list"><p class="empty">Zatím žádné obrázky. Můžeš jich vybrat víc najednou.</p></div>
+    </section>
+
+    <section>
+      <h2>3 · Nastavení</h2>
+      <div class="grid2">
+        <label class="f"><span>Režim <output></output></span>
+          <select id="mode"><option value="dither">Fotka (rastr)</option><option value="threshold">Text / kresba (ostře)</option></select></label>
+        <label class="f"><span>Počet kopií</span><input type="number" id="copies" min="1" max="20" value="1"></label>
+        <label class="f"><span>Jas <output id="oBright">0</output></span><input type="range" id="bright" min="-80" max="80" value="0"></label>
+        <label class="f"><span>Kontrast <output id="oContrast">0</output></span><input type="range" id="contrast" min="-60" max="80" value="10"></label>
+        <label class="f"><span>Sytost tisku <output id="oEnergy">střední</output></span><input type="range" id="energy" min="1" max="3" value="2"></label>
+        <label class="f"><span>Mezera mezi obrázky <output id="oGap">5 mm</output></span><input type="range" id="gap" min="0" max="30" value="5"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="rotate" checked> Otočit obrázky na šířku pásky, když jsou širší než vyšší</label>
+      <label class="check"><input type="checkbox" id="cut"> Mezi obrázky vytisknout čáru pro odstřižení</label>
+    </section>
+
+    <section>
+      <h2>4 · Tisk</h2>
+      <button class="primary" id="print" disabled>Vytisknout vše</button>
+      <div class="progress"><i id="bar"></i></div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <aside class="paperbox">
+    <div class="paper" id="paper"></div>
+    <p id="paperInfo">Náhled pásky</p>
+  </aside>
+</div>
+
+<script>
+const W = 384;                         // printhead width in dots
+const SVC = 0xae30, WCH = 0xae01, NCH = 0xae02;
+const $ = id => document.getElementById(id);
+const log = m => { $('log').textContent += m + '\n'; $('log').scrollTop = 1e9; };
+
+/* ---------- protocol (GB01 family: MX05/MX06/MX08/MX10) ---------- */
+const CRC = new Uint8Array(256);
+for (let i = 0; i < 256; i++) { let c = i; for (let b = 0; b < 8; b++) c = c & 0x80 ? ((c << 1) ^ 0x07) & 0xff : (c << 1) & 0xff; CRC[i] = c; }
+const crc8 = d => { let c = 0; for (const b of d) c = CRC[(c ^ b) & 0xff]; return c; };
+const cmd = (c, data) => [0x51, 0x78, c, 0x00, data.length & 0xff, 0x00, ...data, crc8(data), 0xff];
+const C = {
+  state: () => cmd(0xa3, [0x00]),
+  quality: () => cmd(0xa4, [0x33]),
+  energy: e => cmd(0xaf, [e & 0xff, (e >> 8) & 0xff]),
+  applyEnergy: () => cmd(0xbe, [0x01]),
+  speed: s => cmd(0xbd, [s]),
+  update: () => cmd(0xa9, [0x00]),
+  latticeStart: () => cmd(0xa6, [0xaa,0x55,0x17,0x38,0x44,0x5f,0x5f,0x5f,0x44,0x38,0x2c]),
+  latticeEnd: () => cmd(0xa6, [0xaa,0x55,0x17,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x17]),
+  feed: n => cmd(0xa1, [n & 0xff, (n >> 8) & 0xff]),
+  row: bytes => cmd(0xa2, bytes),
+};
+
+/* ---------- Bluetooth ---------- */
+let dev = null, wch = null, paused = false, chunk = 180;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function setStatus(on, txt) { $('status').classList.toggle('on', on); $('statusTxt').textContent = txt; $('connect').disabled = on; $('disconnect').disabled = !on; refreshPrint(); }
+
+if (!navigator.bluetooth) $('noBt').hidden = false;
+
+$('connect').onclick = async () => {
+  try {
+    dev = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SVC] }, { namePrefix: 'MX' }, { namePrefix: 'GB' }, { namePrefix: 'GT' }, { namePrefix: 'YT' }],
+      optionalServices: [SVC]
+    });
+    dev.addEventListener('gattserverdisconnected', () => { wch = null; setStatus(false, 'Odpojeno'); log('Tiskárna se odpojila.'); });
+    log('Připojuji k ' + (dev.name || 'tiskárně') + '…');
+    const srv = await dev.gatt.connect();
+    const s = await srv.getPrimaryService(SVC);
+    wch = await s.getCharacteristic(WCH);
+    try {
+      const n = await s.getCharacteristic(NCH);
+      await n.startNotifications();
+      n.addEventListener('characteristicvaluechanged', e => {
+        const v = new Uint8Array(e.target.value.buffer);
+        if (v[2] === 0xae) paused = v[6] === 0x10;   // printer buffer full / free again
+      });
+    } catch (e) { log('Bez zpětné vazby z tiskárny, tisknu pomaleji.'); }
+    setStatus(true, dev.name || 'Připojeno');
+    log('Připojeno.');
+  } catch (e) { log('Připojení selhalo: ' + e.message); }
+};
+$('disconnect').onclick = () => dev && dev.gatt.connected && dev.gatt.disconnect();
+
+async function send(bytes, onProgress) {
+  const buf = Uint8Array.from(bytes);
+  for (let i = 0; i < buf.length;) {
+    while (paused) await sleep(30);
+    const part = buf.subarray(i, i + chunk);
+    try { await wch.writeValueWithoutResponse(part); }
+    catch (e) { if (chunk > 20) { chunk = 20; continue; } throw e; }
+    i += part.length;
+    if (onProgress) onProgress(i / buf.length);
+    await sleep(chunk > 20 ? 12 : 4);
+  }
+}
+
+/* ---------- images ---------- */
+let items = [];   // {name, img, url}
+$('files').onchange = async e => {
+  for (const f of e.target.files) {
+    const url = URL.createObjectURL(f);
+    const img = new Image(); img.src = url;
+    try { await img.decode(); items.push({ name: f.name, img, url }); } catch { log('Nejde načíst: ' + f.name); }
+  }
+  e.target.value = '';
+  render();
+};
+$('clear').onclick = () => { items.forEach(i => URL.revokeObjectURL(i.url)); items = []; render(); };
+
+function render() {
+  const l = $('list'); l.innerHTML = '';
+  if (!items.length) l.innerHTML = '<p class="empty">Zatím žádné obrázky. Můžeš jich vybrat víc najednou.</p>';
+  items.forEach((it, i) => {
+    const d = document.createElement('div'); d.className = 'item';
+    d.innerHTML = `<img alt=""><div style="min-width:0"><div class="name"></div><div class="meta">${it.img.naturalWidth}×${it.img.naturalHeight}</div></div>
+      <div class="btns"><button aria-label="Nahoru">↑</button><button aria-label="Dolů">↓</button><button aria-label="Odebrat">✕</button></div>`;
+    d.querySelector('img').src = it.url; d.querySelector('.name').textContent = it.name;
+    const [up, down, rm] = d.querySelectorAll('button');
+    up.disabled = i === 0; down.disabled = i === items.length - 1;
+    up.onclick = () => { [items[i - 1], items[i]] = [items[i], items[i - 1]]; render(); };
+    down.onclick = () => { [items[i + 1], items[i]] = [items[i], items[i + 1]]; render(); };
+    rm.onclick = () => { URL.revokeObjectURL(it.url); items.splice(i, 1); render(); };
+    l.appendChild(d);
+  });
+  preview(); refreshPrint();
+}
+
+function settings() {
+  return {
+    mode: $('mode').value, bright: +$('bright').value, contrast: +$('contrast').value,
+    rotate: $('rotate').checked, cut: $('cut').checked,
+    gap: +$('gap').value, copies: Math.max(1, Math.min(20, +$('copies').value || 1)),
+    energy: [0, 0x2000, 0x3a00, 0x5800][+$('energy').value]
+  };
+}
+
+// Returns {w, h, bits: Uint8Array (1 = black)}
+function processImage(img, s) {
+  let iw = img.naturalWidth, ih = img.naturalHeight;
+  const rot = s.rotate && iw > ih;
+  const srcW = rot ? ih : iw, srcH = rot ? iw : ih;
+  const h = Math.max(1, Math.round(srcH * W / srcW));
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = h;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, h);
+  if (rot) { g.translate(W, 0); g.rotate(Math.PI / 2); g.drawImage(img, 0, 0, h, W); }
+  else g.drawImage(img, 0, 0, W, h);
+  const px = g.getImageData(0, 0, W, h).data;
+  const lum = new Float32Array(W * h);
+  const cf = (259 * (s.contrast * 2.55 + 255)) / (255 * (259 - s.contrast * 2.55));
+  for (let i = 0; i < W * h; i++) {
+    let v = 0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2];
+    v = cf * (v - 128) + 128 + s.bright * 1.5;
+    lum[i] = v < 0 ? 0 : v > 255 ? 255 : v;
+  }
+  const bits = new Uint8Array(W * h);
+  if (s.mode === 'threshold') { for (let i = 0; i < lum.length; i++) bits[i] = lum[i] < 128 ? 1 : 0; }
+  else {
+    for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x, o = lum[i], n = o < 128 ? 0 : 255, e = o - n;
+      bits[i] = n === 0 ? 1 : 0;
+      if (x + 1 < W) lum[i + 1] += e * 7 / 16;
+      if (y + 1 < h) { if (x > 0) lum[i + W - 1] += e * 3 / 16; lum[i + W] += e * 5 / 16; if (x + 1 < W) lum[i + W + 1] += e / 16; }
+    }
+  }
+  return { w: W, h, bits };
+}
+
+function toCanvas(p) {
+  const cv = document.createElement('canvas'); cv.width = p.w; cv.height = p.h;
+  const g = cv.getContext('2d'), id = g.createImageData(p.w, p.h);
+  for (let i = 0; i < p.bits.length; i++) { const v = p.bits[i] ? 20 : 251; id.data[i*4] = id.data[i*4+1] = id.data[i*4+2] = v; id.data[i*4+3] = 255; }
+  g.putImageData(id, 0, 0); return cv;
+}
+
+let pvTimer;
+function preview() {
+  clearTimeout(pvTimer);
+  pvTimer = setTimeout(() => {
+    const s = settings(), paper = $('paper'); paper.innerHTML = '';
+    let mm = 0;
+    items.forEach((it, i) => {
+      const p = processImage(it.img, s);
+      paper.appendChild(toCanvas(p)); mm += p.h / 8;
+      if (i < items.length - 1) { const g = document.createElement('div'); g.className = 'gap'; g.style.marginBlock = (s.gap * 1.1) + 'px'; paper.appendChild(g); mm += s.gap; }
+    });
+    $('paperInfo').textContent = items.length
+      ? `${items.length} obr. × ${s.copies} kop. · cca ${Math.round((mm * s.copies) / 10)} cm pásky`
+      : 'Náhled pásky';
+  }, 120);
+}
+
+function refreshPrint() { $('print').disabled = !(wch && items.length); }
+
+/* ---------- printing ---------- */
+function jobBytes(p) {
+  const out = [];
+  let blank = 0;
+  for (let y = 0; y < p.h; y++) {
+    const row = new Array(48).fill(0); let any = false;
+    for (let x = 0; x < W; x++) if (p.bits[y * W + x]) { row[x >> 3] |= 1 << (x & 7); any = true; }
+    if (!any) { blank++; continue; }
+    if (blank) { out.push(...C.feed(blank)); blank = 0; }
+    out.push(...C.row(row));
+  }
+  if (blank) out.push(...C.feed(blank));
+  return out;
+}
+
+$('print').onclick = async () => {
+  const s = settings();
+  $('print').disabled = true; $('bar').style.width = '0';
+  try {
+    const parts = [];
+    for (let c = 0; c < s.copies; c++) items.forEach(it => parts.push(processImage(it.img, s)));
+    const head = [...C.state(), ...C.quality(), ...C.energy(s.energy), ...C.applyEnergy(), ...C.speed(32), ...C.update()];
+    await send(head);
+    for (let i = 0; i < parts.length; i++) {
+      log(`Tisknu ${i + 1}/${parts.length}…`);
+      let bytes = [...C.latticeStart(), ...jobBytes(parts[i]), ...C.latticeEnd()];
+      const last = i === parts.length - 1;
+      if (!last) {
+        const gapDots = Math.round(s.gap * 8);
+        if (s.cut) bytes.push(...C.feed(Math.floor(gapDots / 2)), ...C.latticeStart(), ...C.row(new Array(48).fill(0x55)), ...C.latticeEnd(), ...C.feed(Math.ceil(gapDots / 2)));
+        else if (gapDots) bytes.push(...C.feed(gapDots));
+      }
+      await send(bytes, f => $('bar').style.width = ((i + f) / parts.length * 100) + '%');
+    }
+    await send([...C.feed(90), ...C.state()]);   // push the last image out past the tear edge
+    $('bar').style.width = '100%'; log('Hotovo.');
+  } catch (e) { log('Tisk selhal: ' + e.message); }
+  refreshPrint();
+};
+
+['mode','bright','contrast','gap','rotate','cut','copies','energy'].forEach(id => $(id).addEventListener('input', () => {
+  $('oBright').textContent = $('bright').value; $('oContrast').textContent = $('contrast').value;
+  $('oGap').textContent = $('gap').value + ' mm'; $('oEnergy').textContent = ['', 'slabá', 'střední', 'silná'][$('energy').value];
+  preview();
+}));
+</script>
+</body>
+</html>
