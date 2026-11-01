@@ -146,15 +146,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
     <label class="fld">Velikost a rozlišení
       <select id="strips"><option value="1" selected>1 pruh · 48 mm · 384 bodů</option><option value="2">2 pruhy vedle sebe · 96 mm · 768 bodů</option><option value="3">3 pruhy vedle sebe · 144 mm · 1152 bodů</option></select>
       <span class="hintx">Víc pruhů = 2–3× ostřejší obrázek. Vytisknou se za sebou a slepíš je k sobě podélně.</span></label>
-    <div class="sl"><div class="lab">Jas <output id="oBright">-5</output></div><input type="range" id="bright" min="-80" max="80" value="-5"></div>
-    <div class="sl"><div class="lab">Kontrast <output id="oContrast">15</output></div><input type="range" id="contrast" min="-60" max="80" value="15"></div>
+    <div class="sl"><div class="lab">Jas <output id="oBright">0</output></div><input type="range" id="bright" min="-80" max="80" value="0"></div>
+    <div class="sl"><div class="lab">Kontrast <output id="oContrast">5</output></div><input type="range" id="contrast" min="-60" max="80" value="5"></div>
 
     <details>
       <summary>Další nastavení</summary>
       <div class="adv">
-        <div class="sl"><div class="lab">Kompenzace rozpíjení <output id="oGamma">1.0</output></div>
-          <input type="range" id="gamma" min="10" max="25" value="10"><div class="hint"><span>vypnuto</span><span>světlejší stíny</span></div></div>
-        <div class="sl"><div class="lab">Doostření <output id="oSharp">70</output></div><input type="range" id="sharp" min="0" max="150" value="70"></div>
+        <div class="sl"><div class="lab">Kompenzace rozpíjení <output id="oGamma">1.1</output></div>
+          <input type="range" id="gamma" min="10" max="25" value="11"><div class="hint"><span>vypnuto</span><span>světlejší stíny</span></div></div>
+        <div class="sl"><div class="lab">Doostření <output id="oSharp">35</output></div><input type="range" id="sharp" min="0" max="150" value="35"></div>
         <div class="two">
           <label class="fld">Rastr
             <select id="mode"><option value="fs" selected>Plný (Floyd–Steinberg)</option><option value="atkinson">Ostrý, světlejší (Atkinson)</option><option value="threshold">Bez rastru</option></select></label>
@@ -163,6 +163,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
           <label class="fld">Kopie<input type="number" id="copies" min="1" max="20" value="1"></label>
           <label class="fld">Mezera (mm)<input type="number" id="gap" min="0" max="30" value="5"></label>
         </div>
+        <label class="chk"><input type="checkbox" id="smooth" checked> Vyhladit šum fotky (méně zrnité)</label>
         <label class="chk"><input type="checkbox" id="rotate" checked> Široké obrázky otočit na délku pásky</label>
         <label class="chk"><input type="checkbox" id="cut"> Mezi obrázky čára na odstřižení</label>
         <label class="chk"><input type="checkbox" id="rle"> Komprimovaný přenos (plynulejší, zkušební)</label>
@@ -186,7 +187,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 
 <script>
 const W = 384;
-const VERSION = 'verze 7 (test)';
+const VERSION = 'verze 8 (test)';
 const SVC = 0xae30, WCH = 0xae01, NCH = 0xae02;
 const $ = id => document.getElementById(id);
 const log = m => { $('log').textContent += m + '\n'; $('log').scrollTop = 1e9; };
@@ -306,9 +307,9 @@ function render() {
 
 /* ---------- presets ---------- */
 const PRESETS = {
-  photo: { mode: 'fs', sharp: 60, gamma: 10, contrast: 15, bright: -5 },
-  draw:  { mode: 'atkinson', sharp: 90, gamma: 10, contrast: 30, bright: 0 },
-  text:  { mode: 'threshold', sharp: 80, gamma: 10, contrast: 40, bright: 0 },
+  photo: { mode: 'fs', sharp: 35, gamma: 11, contrast: 5, bright: 0, smooth: true },
+  draw:  { mode: 'atkinson', sharp: 80, gamma: 10, contrast: 30, bright: 0, smooth: false },
+  text:  { mode: 'threshold', sharp: 80, gamma: 10, contrast: 40, bright: 0, smooth: false },
 };
 let preset = 'photo';
 $('presets').onclick = e => {
@@ -316,13 +317,13 @@ $('presets').onclick = e => {
   preset = b.dataset.p;
   document.querySelectorAll('#presets button').forEach(x => x.setAttribute('aria-pressed', x === b));
   const p = PRESETS[preset];
-  for (const k in p) $(k).value = p[k];
+  for (const k in p) { const el = $(k); if (el.type === 'checkbox') el.checked = p[k]; else el.value = p[k]; }
   labels(); preview();
 };
 
 function settings() {
   return {
-    mode: $('mode').value, sharp: +$('sharp').value, gamma: +$('gamma').value / 10,
+    mode: $('mode').value, smooth: $('smooth').checked, sharp: +$('sharp').value, gamma: +$('gamma').value / 10,
     bright: +$('bright').value, contrast: +$('contrast').value,
     rotate: $('rotate').checked, cut: $('cut').checked, rle: $('rle').checked,
     gap: Math.max(0, Math.min(30, +$('gap').value || 0)), copies: Math.max(1, Math.min(20, +$('copies').value || 1)),
@@ -376,13 +377,23 @@ function processImage(img, s) {
     lut[v] = 255 * Math.pow(x / 255, 1 / s.gamma);
   }
   let lum = new Float32Array(W * h);
-  for (let i = 0; i < W * h; i++) lum[i] = lut[gray[i]];
+  for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    if (s.smooth && x > 0 && y > 0 && x < W - 1 && y < h - 1) {
+      const b = (4 * gray[i] + 2 * (gray[i - 1] + gray[i + 1] + gray[i - W] + gray[i + W]) + gray[i - W - 1] + gray[i - W + 1] + gray[i + W - 1] + gray[i + W + 1]) / 16;
+      lum[i] = lut[Math.round(gray[i] * 0.5 + b * 0.5)];
+    } else lum[i] = lut[gray[i]];
+  }
 
   if (s.sharp > 0) {
     const a = s.sharp / 50, out = new Float32Array(lum.length);
     for (let y = 0; y < h; y++) for (let x = 0; x < W; x++) {
       const i = y * W + x;
-      const v = lum[i] + a * (4 * lum[i] - lum[x > 0 ? i - 1 : i] - lum[x < W - 1 ? i + 1 : i] - lum[y > 0 ? i - W : i] - lum[y < h - 1 ? i + W : i]) / 4;
+      const d = (4 * lum[i] - lum[x > 0 ? i - 1 : i] - lum[x < W - 1 ? i + 1 : i] - lum[y > 0 ? i - W : i] - lum[y < h - 1 ? i + W : i]) / 4;
+      // only real edges get sharpened; small differences are photo noise and would turn into white speckles
+      const ad = Math.abs(d), k = ad < 4 ? 0 : ad < 12 ? (ad - 4) / 8 : 1;
+      // limit the boost so edges don't get white halos
+      const v = lum[i] + Math.max(-40, Math.min(40, a * d * k));
       out[i] = v < 0 ? 0 : v > 255 ? 255 : v;
     }
     lum = out;
@@ -558,18 +569,18 @@ function labels() {
   $('oBright').textContent = $('bright').value; $('oContrast').textContent = $('contrast').value;
   $('oSharp').textContent = $('sharp').value; $('oGamma').textContent = (+$('gamma').value / 10).toFixed(1);
 }
-['energy','bright','contrast','sharp','gamma','mode','speed','copies','gap','rotate','cut','rle','strips'].forEach(id =>
+['energy','bright','contrast','sharp','gamma','mode','speed','copies','gap','rotate','cut','rle','strips','smooth'].forEach(id =>
   ['input', 'change'].forEach(ev => $(id).addEventListener(ev, () => { labels(); preview(); })));
 
 /* remember the user's settings on this phone */
-const KEYS = ['strips','energy','bright','contrast','sharp','gamma','mode','speed','gap','rotate','cut','rle'];
+const KEYS = ['smooth','strips','energy','bright','contrast','sharp','gamma','mode','speed','gap','rotate','cut','rle'];
 try {
-  const saved = JSON.parse(localStorage.getItem('mx06v5') || '{}');
+  const saved = JSON.parse(localStorage.getItem('mx06v8') || '{}');
   KEYS.forEach(k => { if (k in saved) { const el = $(k); if (el.type === 'checkbox') el.checked = saved[k]; else el.value = saved[k]; } });
   if (saved.preset) { preset = saved.preset; document.querySelectorAll('#presets button').forEach(x => x.setAttribute('aria-pressed', x.dataset.p === preset)); }
 } catch (e) {}
 addEventListener('input', () => {
-  try { const o = { preset }; KEYS.forEach(k => { const el = $(k); o[k] = el.type === 'checkbox' ? el.checked : el.value; }); localStorage.setItem('mx06v5', JSON.stringify(o)); } catch (e) {}
+  try { const o = { preset }; KEYS.forEach(k => { const el = $(k); o[k] = el.type === 'checkbox' ? el.checked : el.value; }); localStorage.setItem('mx06v8', JSON.stringify(o)); } catch (e) {}
 });
 $('presets').addEventListener('click', () => setTimeout(() => dispatchEvent(new Event('input')), 0));
 
